@@ -4,7 +4,7 @@ import PropTypes from "prop-types";
 import { toast } from "react-toastify";
 import Modal from "./Modal"; // 🧩 seu modal central reutilizável
 
-export default function ModalEditarPerfil({ usuario, onFechar, onSalvar }) {
+export default function ModalEditPerfil({ usuario, onFechar, onSalvar }) {
   const perfilDisponiveis = [
     { label: "usuario", value: "usuario" },
     { label: "instrutor", value: "instrutor" },
@@ -102,7 +102,7 @@ export default function ModalEditarPerfil({ usuario, onFechar, onSalvar }) {
   );
 }
 
-ModalEditarPerfil.propTypes = {
+ModalEditPerfil.propTypes = {
   usuario: PropTypes.object.isRequired,
   onFechar: PropTypes.func.isRequired,
   onSalvar: PropTypes.func.isRequired,

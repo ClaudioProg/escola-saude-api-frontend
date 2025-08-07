@@ -6,7 +6,7 @@ import Skeleton from "react-loading-skeleton";
 
 import Breadcrumbs from "../components/Breadcrumbs";
 import TabelaUsuarios from "../components/TabelaUsuarios";
-import ModalEditarPerfil from "../components/ModalEditarPerfil";
+import ModalEditPerfil from "../components/ModalEditPerfil";
 import usePerfilPermitidos from "../hooks/usePerfilPermitidos";
 import CabecalhoPainel from "../components/CabecalhoPainel";
 
@@ -109,7 +109,7 @@ export default function GestaoUsuarios() {
       )}
 
       {usuarioSelecionado && (
-        <ModalEditarPerfil
+        <ModalEditPerfil
           usuario={usuarioSelecionado}
           onFechar={() => setUsuarioSelecionado(null)}
           onSalvar={salvarperfil}
