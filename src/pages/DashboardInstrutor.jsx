@@ -11,7 +11,7 @@ import Notificacoes from "../components/Notificacoes";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import useperfilPermitidos from "../hooks/useperfilPermitidos";
-import QRCode from "qrcode";
+import { QRCodeCanvas } from "qrcode.react";
 import { formatarCPF } from "../utils/data";
 import { formatarDataBrasileira } from "../utils/data";
 
@@ -243,36 +243,48 @@ const turmasFiltradas = turmas.filter((t) => {
       }
   
       const url = `https://escoladesaude.santos.br/presenca/${turmaId}`;
-      const dataUrl = await QRCode.toDataURL(url);
   
-      const doc = new jsPDF({ orientation: "landscape" });
+      // 👉 Cria um canvas temporário com QRCodeCanvas
+      const canvasContainer = document.createElement("div");
+      const qrCodeElement = (
+        <QRCodeCanvas value={url} size={300} />
+      );
+      import("react-dom").then((ReactDOM) => {
+        ReactDOM.render(qrCodeElement, canvasContainer);
   
-      doc.setFontSize(24);
-      doc.setFont("helvetica", "bold");
-      doc.text(nomeEvento, 148, 30, { align: "center" });
+        setTimeout(() => {
+          const canvas = canvasContainer.querySelector("canvas");
+          const dataUrl = canvas?.toDataURL("image/png");
   
-      const usuario = JSON.parse(localStorage.getItem("usuario") || "{}");
-      const nomeInstrutor = usuario?.nome || "Instrutor";
+          if (!dataUrl) {
+            toast.error("Erro ao gerar imagem do QR Code.");
+            return;
+          }
   
-      doc.setFontSize(16);
-      doc.setFont("helvetica", "normal");
-      doc.text(`Instrutor: ${nomeInstrutor}`, 148, 40, { align: "center" });
+          const doc = new jsPDF({ orientation: "landscape" });
+          doc.setFontSize(24);
+          doc.setFont("helvetica", "bold");
+          doc.text(nomeEvento, 148, 30, { align: "center" });
   
-      doc.addImage(dataUrl, "PNG", 98, 50, 100, 100);
+          const nomeInstrutor = usuario?.nome || "Instrutor";
+          doc.setFontSize(16);
+          doc.setFont("helvetica", "normal");
+          doc.text(`Instrutor: ${nomeInstrutor}`, 148, 40, { align: "center" });
   
-      doc.setFontSize(12);
-      doc.setTextColor(60);
-      doc.text("Escaneie este QR Code para confirmar sua presença", 148, 160, { align: "center" });
+          doc.addImage(dataUrl, "PNG", 98, 50, 100, 100);
+          doc.setFontSize(12);
+          doc.setTextColor(60);
+          doc.text("Escaneie este QR Code para confirmar sua presença", 148, 160, { align: "center" });
   
-      doc.save(`qr_presenca_turma_${turmaId}.pdf`);
-      toast.success("🔳 QR Code gerado!");
+          doc.save(`qr_presenca_turma_${turmaId}.pdf`);
+          toast.success("🔳 QR Code gerado!");
+        }, 500);
+      });
     } catch (err) {
       console.error("Erro ao gerar QR Code:", err);
       toast.error("Erro ao gerar QR Code.");
     }
   };
-  
-  
 
    return (
     <div className="min-h-screen bg-gelo dark:bg-zinc-900 px-2 sm:px-4 py-6">
