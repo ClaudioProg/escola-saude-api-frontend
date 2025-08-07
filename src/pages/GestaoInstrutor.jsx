@@ -6,13 +6,13 @@ import Modal from "react-modal";
 
 import Breadcrumbs from "../components/Breadcrumbs";
 import TabelaInstrutor from "../components/TabelaInstrutor";
-import useperfilPermitidos from "../hooks/useperfilPermitidos";
+import usePerfilPermitidos from "../hooks/usePerfilPermitidos";
 import CabecalhoPainel from "../components/CabecalhoPainel";
 
 Modal.setAppElement("#root");
 
 export default function GestaoInstrutor() {
-  const { temAcesso, carregando } = useperfilPermitidos(["administrador"]);
+  const { temAcesso, carregando } = usePerfilPermitidos(["administrador"]);
   const [instrutor, setInstrutor] = useState([]);
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [erro, setErro] = useState("");

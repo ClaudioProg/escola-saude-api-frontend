@@ -10,7 +10,7 @@ import ModalAssinatura from "../components/ModalAssinatura";
 import Notificacoes from "../components/Notificacoes";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import useperfilPermitidos from "../hooks/useperfilPermitidos";
+import usePerfilPermitidos from "../hooks/usePerfilPermitidos";
 import { QRCodeCanvas } from "qrcode.react";
 import { formatarCPF } from "../utils/data";
 import { formatarDataBrasileira } from "../utils/data";
@@ -20,7 +20,7 @@ export default function DashboardInstrutor() {
   const token = localStorage.getItem("token") || "";
   const usuario = JSON.parse(localStorage.getItem("usuario") || "{}");
   const nome = usuario?.nome || "";
-  const { temAcesso, carregando: carregandoPermissao } = useperfilPermitidos(["instrutor", "administrador"]);
+  const { temAcesso, carregando: carregandoPermissao } = usePerfilPermitidos(["instrutor", "administrador"]);
 
   const [turmas, setTurmas] = useState([]);
   const [erro, setErro] = useState("");

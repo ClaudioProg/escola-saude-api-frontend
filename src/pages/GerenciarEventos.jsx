@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { Pencil, Trash2, PlusCircle } from "lucide-react";
 
 import ModalEvento from "../components/ModalEvento";
-import useperfilPermitidos from "../hooks/useperfilPermitidos";
+import usePerfilPermitidos from "../hooks/usePerfilPermitidos";
 import Breadcrumbs from "../components/Breadcrumbs";
 import NenhumDado from "../components/NenhumDado";
 import SkeletonEvento from "../components/SkeletonEvento";
@@ -14,7 +14,7 @@ import CabecalhoPainel from "../components/CabecalhoPainel";
 
 export default function GerenciarEventos() {
   const token = localStorage.getItem("token") || "";
-  const { temAcesso, carregando: carregandoPermissao } = useperfilPermitidos(["administrador"]);
+  const { temAcesso, carregando: carregandoPermissao } = usePerfilPermitidos(["administrador"]);
 
   const [eventos, setEventos] = useState([]);
   const [eventoSelecionado, setEventoSelecionado] = useState(null);

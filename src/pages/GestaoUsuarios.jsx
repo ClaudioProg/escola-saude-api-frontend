@@ -7,11 +7,11 @@ import Skeleton from "react-loading-skeleton";
 import Breadcrumbs from "../components/Breadcrumbs";
 import TabelaUsuarios from "../components/TabelaUsuarios";
 import ModalEditarperfil from "../components/ModalEditarperfil";
-import useperfilPermitidos from "../hooks/useperfilPermitidos";
+import usePerfilPermitidos from "../hooks/usePerfilPermitidos";
 import CabecalhoPainel from "../components/CabecalhoPainel";
 
 export default function GestaoUsuarios() {
-  const { temAcesso, carregando } = useperfilPermitidos(["administrador"]);
+  const { temAcesso, carregando } = usePerfilPermitidos(["administrador"]);
   const [usuarios, setUsuarios] = useState([]);
   const [carregandoUsuarios, setCarregandoUsuarios] = useState(true);
   const [erro, setErro] = useState("");
