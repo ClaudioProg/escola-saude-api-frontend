@@ -14,6 +14,7 @@ export default function DashboardUsuario() {
   const [erro, setErro] = useState(false);
 
   useEffect(() => {
+    console.log("[Dashboard] usando API:", API_BASE_URL);
     async function carregar() {
       try {
         console.log("🔑 Token (automático via apiGet). Buscando dashboard…");
