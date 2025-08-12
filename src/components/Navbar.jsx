@@ -68,7 +68,6 @@ export default function Navbar() {
   return () => window.removeEventListener("storage", onStorage);
 }, []);
 
-  // ⬇️ REMOVIDO fetch com http://; agora usamos apiGet (HTTPS via VITE_API_BASE_URL)
   const [notificacoes, setNotificacoes] = useState([]);
   useEffect(() => {
     apiGet("/api/notificacoes")

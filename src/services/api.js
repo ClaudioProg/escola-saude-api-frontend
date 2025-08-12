@@ -187,3 +187,42 @@ export async function apiPostFile(path, body, opts = {}) {
 
   return { blob, filename };
 }
+
+// GET que retorna arquivo (Blob)
+export async function apiGetFile(path, opts = {}) {
+  const { auth = true, headers, query, on403 = "silent" } = opts;
+  const token = localStorage.getItem("token");
+  const safePath = path.startsWith("/") ? path : `/${path}`;
+  const url = `${API_BASE_URL}${safePath}${qs(query)}`;
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),
+      Accept: "*/*",
+      ...headers,
+    },
+    credentials: "include",
+  });
+
+  if (res.status === 401) localStorage.clear();
+  if (res.status === 403 && on403 === "silent") throw new Error("Sem permissão.");
+
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const txt = await res.text();
+      msg = txt || msg;
+      const json = JSON.parse(txt);
+      msg = json?.erro || json?.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition") || "";
+  const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i);
+  const filename = m ? decodeURIComponent(m[1]) : undefined;
+
+  return { blob, filename };
+}
