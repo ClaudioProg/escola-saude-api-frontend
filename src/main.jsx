@@ -10,8 +10,7 @@ import "./index.css";
 import "./App.css";
 
 // ✅ Google OAuth Client ID vindo das envs do Vite/Vercel
-//const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const clientId = 73659622214-hnvgo1bptk0d8asm63mrmuopd85k3l6s.apps.googleusercontent.com
+const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 // Necessário para acessibilidade do react-modal
 Modal.setAppElement("#root");
