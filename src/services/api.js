@@ -6,17 +6,33 @@ const RAW_BASE = (import.meta.env.VITE_API_BASE_URL || "").trim();
 export const API_BASE_URL = RAW_BASE.replace(/\/+$/, "");
 const IS_DEV = !!import.meta.env.DEV;
 
-// ⚠️ Alertas úteis em produção (diagnóstico rápido)
-if (!IS_DEV) {
-  if (!API_BASE_URL) {
-    console.warn("[API] VITE_API_BASE_URL não definida em produção. As chamadas irão para caminhos relativos (/api/...). Se você não configurou rewrites no Vercel, isso causará 404.");
-  }
-  if (API_BASE_URL.startsWith("http://") && window.location.protocol === "https:") {
-    console.error("[API] VITE_API_BASE_URL está em http:// enquanto o site está em https:// → Mixed Content. Use HTTPS na base da API.");
-  }
-}
+/* ──────────────────────────────────────────────────────────────────
+   LOGS DE INICIALIZAÇÃO (APARECEM EM PRODUÇÃO TAMBÉM)
+   ────────────────────────────────────────────────────────────────── */
+(() => {
+  // Mostra a base em runtime + contexto de página
+  console.info("[API:init] base:", API_BASE_URL || "(vazia)", {
+    protocol: typeof window !== "undefined" ? window.location.protocol : "n/a",
+    host:     typeof window !== "undefined" ? window.location.host : "n/a",
+    env:      IS_DEV ? "dev" : "prod",
+  });
 
-// 🔑 Lê token salvo
+  if (!API_BASE_URL) {
+    console.warn("[API:init] VITE_API_BASE_URL vazia → chamadas irão para caminhos relativos (/api/...). Se o host (Vercel) não tiver rewrites configurados, resultará em 404.");
+  }
+
+  if (API_BASE_URL.startsWith("http://")) {
+    console.error("[API:init] VITE_API_BASE_URL usa http://. Em páginas https:// isso causa Mixed Content. Use https:// na base.");
+  }
+
+  if (typeof window !== "undefined" && window.location.protocol === "https:" && API_BASE_URL.startsWith("http://")) {
+    console.error("[API:init] Mixed Content iminente: página https com API http.");
+  }
+})();
+
+/* ────────────────────────────────────────────────────────────────── */
+
+ // 🔑 Lê token salvo
 const getToken = () => localStorage.getItem("token");
 
 // 🧾 Headers padrão
@@ -61,12 +77,15 @@ async function handle(res, { on401 = "redirect", on403 = "silent" } = {}) {
 
   try { data = text ? JSON.parse(text) : null; } catch { data = null; }
 
+  // Log de resposta (em dev detalhado; em prod só erros)
   if (IS_DEV) {
     const preview = data ?? text ?? "";
     console[(res.ok ? "log" : "warn")](
-      `🛬 [${status}] ${url}`,
+      `🛬 [resp ${status}] ${url}`,
       typeof preview === "string" ? preview.slice(0, 500) : preview
     );
+  } else if (!res.ok) {
+    console.warn(`🛬 [resp ${status}] ${url}`);
   }
 
   if (status === 401) {
@@ -98,6 +117,10 @@ async function handle(res, { on401 = "redirect", on403 = "silent" } = {}) {
 async function doFetch(path, { method = "GET", auth = true, headers, query, body, on401, on403 } = {}) {
   // garante que path tenha barra inicial
   const safePath = path.startsWith("/") ? path : `/${path}`;
+  if (path && !path.startsWith("/")) {
+    console.warn(`[API] path sem barra inicial recebido: "${path}" → usando "${safePath}"`);
+  }
+
   // monta URL: se não houver base, usa relativo (ex.: quando usando rewrites no Vercel)
   const url = `${API_BASE_URL}${safePath}${qs(query)}`;
 
@@ -118,18 +141,31 @@ async function doFetch(path, { method = "GET", auth = true, headers, query, body
     init.body = body ? JSON.stringify(body) : undefined;
   }
 
-  if (IS_DEV) {
-    const preview = body instanceof FormData ? "[FormData]" : body;
-    console.log(`🛫 [${method}] ${url}`, { headers: init.headers, body: preview });
+  // LOG DA REQUEST (sempre; sem vazar token)
+  const hasAuth = !!init.headers?.Authorization;
+  const headersPreview = { ...init.headers };
+  if (headersPreview.Authorization) headersPreview.Authorization = "Bearer ***";
+  console.log(`🛫 [req ${method}] ${url}`, {
+    auth: auth ? "on" : "off",
+    hasAuthHeader: hasAuth,
+    headers: headersPreview,
+    body: body instanceof FormData ? "[FormData]" : body,
+  });
+  if (url.startsWith("http://")) {
+    console.warn("[API] URL HTTP detectada (risco Mixed Content):", url);
   }
 
   let res;
+  const t0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
   try {
     res = await fetch(url, init);
   } catch (networkErr) {
-    if (IS_DEV) console.error("🌩️ Erro de rede:", networkErr?.message || networkErr);
+    const t1 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+    console.error(`🌩️ [neterr ${method}] ${url} (${Math.round(t1 - t0)}ms):`, networkErr?.message || networkErr);
     throw new ApiError("Falha de rede ou CORS", { status: 0, url, data: networkErr });
   }
+  const t1 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+  console.log(`⏱️ [time ${method}] ${url} → ${Math.round(t1 - t0)}ms`);
 
   return handle(res, { on401, on403 });
 }
