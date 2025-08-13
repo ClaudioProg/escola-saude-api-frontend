@@ -1,39 +1,58 @@
 // 📁 src/services/api.js
 
-// 🔧 Base URL vinda do .env (Vite). Ex.: https://escola-saude-api.onrender.com
+// 🔧 Base URL vinda do .env (Vite). Ex.: https://escola-saude-api.onrender.com/api
 const RAW_BASE = (import.meta.env.VITE_API_BASE_URL || "").trim();
-// remove barras finais da base
-export const API_BASE_URL = RAW_BASE.replace(/\/+$/, "");
+// remove barras finais da base (fica sem trailing slash)
+let API_BASE_URL = RAW_BASE.replace(/\/+$/, "");
 const IS_DEV = !!import.meta.env.DEV;
 
 /* ──────────────────────────────────────────────────────────────────
-   LOGS DE INICIALIZAÇÃO (APARECEM EM PRODUÇÃO TAMBÉM)
+   LOGS DE INICIALIZAÇÃO
    ────────────────────────────────────────────────────────────────── */
 (() => {
-  // Mostra a base em runtime + contexto de página
+  const proto = typeof window !== "undefined" ? window.location.protocol : "n/a";
+  const host  = typeof window !== "undefined" ? window.location.host      : "n/a";
+
   console.info("[API:init] base:", API_BASE_URL || "(vazia)", {
-    protocol: typeof window !== "undefined" ? window.location.protocol : "n/a",
-    host:     typeof window !== "undefined" ? window.location.host : "n/a",
-    env:      IS_DEV ? "dev" : "prod",
+    protocol: proto,
+    host,
+    env: IS_DEV ? "dev" : "prod",
   });
 
   if (!API_BASE_URL) {
-    console.warn("[API:init] VITE_API_BASE_URL vazia → chamadas irão para caminhos relativos (/api/...). Se o host (Vercel) não tiver rewrites configurados, resultará em 404.");
+    const msg = "[API:init] VITE_API_BASE_URL vazia.";
+    if (IS_DEV) {
+      console.warn(`${msg} Em dev você pode usar rewrites locais; em prod isso causará 404.`);
+    } else {
+      console.error(`${msg} Em produção isto levará a 404. Defina a variável de ambiente.`);
+    }
   }
 
   if (API_BASE_URL.startsWith("http://")) {
-    console.error("[API:init] VITE_API_BASE_URL usa http://. Em páginas https:// isso causa Mixed Content. Use https:// na base.");
+    if (IS_DEV) {
+      console.warn("[API:init] VITE_API_BASE_URL usa http:// → convertendo para https:// (dev only).");
+      API_BASE_URL = API_BASE_URL.replace(/^http:\/\//, "https://");
+    } else {
+      console.error("[API:init] VITE_API_BASE_URL usa http://. Em páginas https isso causa Mixed Content. Use https:// na base.");
+    }
   }
 
   if (typeof window !== "undefined" && window.location.protocol === "https:" && API_BASE_URL.startsWith("http://")) {
     console.error("[API:init] Mixed Content iminente: página https com API http.");
   }
+
+  if (!IS_DEV && !API_BASE_URL) {
+    // Em produção, sem base definida, falha cedo para não fazer chamadas relativas
+    throw new Error("VITE_API_BASE_URL ausente em produção.");
+  }
 })();
 
 /* ────────────────────────────────────────────────────────────────── */
 
- // 🔑 Lê token salvo
-const getToken = () => localStorage.getItem("token");
+// 🔑 Lê token salvo
+const getToken = () => {
+  try { return localStorage.getItem("token"); } catch { return null; }
+};
 
 // 🧾 Headers padrão
 function buildHeaders(auth = true, extra = {}) {
@@ -66,6 +85,21 @@ class ApiError extends Error {
   }
 }
 
+// 🧼 Normalizador de path: garante "/" inicial, remove prefixo "/api"
+function normalizePath(path) {
+  if (!path) return "/";
+  // Se vier URL absoluta, respeita (override da base)
+  if (/^https?:\/\//i.test(path)) return path.replace(/^http:\/\//i, "https://");
+
+  let p = String(path);
+  if (!p.startsWith("/")) p = `/${p}`;
+  // Remove um "/api" inicial para não duplicar com a base
+  p = p.replace(/^\/+api\/?/, "/");
+  // Garante uma única barra inicial
+  p = "/" + p.replace(/^\/+/, "");
+  return p;
+}
+
 // 🛰️ Handler centralizado
 async function handle(res, { on401 = "redirect", on403 = "silent" } = {}) {
   const url = res?.url || "";
@@ -90,8 +124,8 @@ async function handle(res, { on401 = "redirect", on403 = "silent" } = {}) {
 
   if (status === 401) {
     if (IS_DEV) console.error("⚠️ 401 recebido: limpando sessão");
-    localStorage.clear();
-    if (on401 === "redirect" && !location.pathname.startsWith("/login")) {
+    try { localStorage.clear(); } catch {}
+    if (on401 === "redirect" && typeof window !== "undefined" && !location.pathname.startsWith("/login")) {
       window.location.assign("/login");
     }
     throw new ApiError(data?.erro || data?.message || "Não autorizado (401)", { status, url, data: data ?? text });
@@ -99,7 +133,7 @@ async function handle(res, { on401 = "redirect", on403 = "silent" } = {}) {
 
   if (status === 403) {
     if (IS_DEV) console.warn("🚫 403 recebido: sem permissão");
-    if (on403 === "redirect" && location.pathname !== "/dashboard") {
+    if (on403 === "redirect" && typeof window !== "undefined" && location.pathname !== "/dashboard") {
       window.location.assign("/dashboard");
     }
     throw new ApiError(data?.erro || data?.message || "Sem permissão (403)", { status, url, data: data ?? text });
@@ -115,19 +149,19 @@ async function handle(res, { on401 = "redirect", on403 = "silent" } = {}) {
 
 // 🌐 Fetch centralizado
 async function doFetch(path, { method = "GET", auth = true, headers, query, body, on401, on403 } = {}) {
-  // garante que path tenha barra inicial
-  const safePath = path.startsWith("/") ? path : `/${path}`;
-  if (path && !path.startsWith("/")) {
-    console.warn(`[API] path sem barra inicial recebido: "${path}" → usando "${safePath}"`);
-  }
+  const safePath = normalizePath(path);
 
-  // monta URL: se não houver base, usa relativo (ex.: quando usando rewrites no Vercel)
-  const url = `${API_BASE_URL}${safePath}${qs(query)}`;
+  // Monta URL final:
+  // - Se safePath for absoluto (https://...), usa direto
+  // - Caso contrário, concatena com a base
+  const isAbsolute = /^https?:\/\//i.test(safePath);
+  const base = isAbsolute ? "" : (API_BASE_URL || ""); // em dev permite vazio p/ rewrites
+  const url = `${base}${safePath}${qs(query)}`;
 
   const init = {
     method,
     headers: buildHeaders(auth, headers),
-    credentials: "include", // cookies entre domínios
+    credentials: "include", // cookies entre domínios (ok se API permitir)
   };
 
   if (body instanceof FormData) {
@@ -171,7 +205,7 @@ async function doFetch(path, { method = "GET", auth = true, headers, query, body
 }
 
 // -------- Métodos HTTP --------
-export async function apiGet(path, opts = {})   { return doFetch(path, { method: "GET",    ...opts }); }
+export async function apiGet(path, opts = {})         { return doFetch(path, { method: "GET",    ...opts }); }
 export async function apiPost(path, body, opts = {})  { return doFetch(path, { method: "POST",  body, ...opts }); }
 export async function apiPut(path, body, opts = {})   { return doFetch(path, { method: "PUT",   body, ...opts }); }
 export async function apiPatch(path, body, opts = {}) { return doFetch(path, { method: "PATCH", body, ...opts }); }
@@ -185,10 +219,12 @@ export async function apiUpload(path, formData, opts = {}) {
 // POST que retorna arquivo (Blob)
 export async function apiPostFile(path, body, opts = {}) {
   const { auth = true, headers, query, on403 = "silent" } = opts;
-  const token = localStorage.getItem("token");
+  const token = getToken();
 
-  const safePath = path.startsWith("/") ? path : `/${path}`;
-  const url = `${API_BASE_URL}${safePath}${qs(query)}`;
+  const safePath = normalizePath(path);
+  const isAbsolute = /^https?:\/\//i.test(safePath);
+  const base = isAbsolute ? "" : (API_BASE_URL || "");
+  const url = `${base}${safePath}${qs(query)}`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -202,7 +238,7 @@ export async function apiPostFile(path, body, opts = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  if (res.status === 401) localStorage.clear();
+  if (res.status === 401) try { localStorage.clear(); } catch {}
   if (res.status === 403 && on403 === "silent") throw new Error("Sem permissão.");
 
   if (!res.ok) {
@@ -227,9 +263,12 @@ export async function apiPostFile(path, body, opts = {}) {
 // GET que retorna arquivo (Blob)
 export async function apiGetFile(path, opts = {}) {
   const { auth = true, headers, query, on403 = "silent" } = opts;
-  const token = localStorage.getItem("token");
-  const safePath = path.startsWith("/") ? path : `/${path}`;
-  const url = `${API_BASE_URL}${safePath}${qs(query)}`;
+  const token = getToken();
+
+  const safePath = normalizePath(path);
+  const isAbsolute = /^https?:\/\//i.test(safePath);
+  const base = isAbsolute ? "" : (API_BASE_URL || "");
+  const url = `${base}${safePath}${qs(query)}`;
 
   const res = await fetch(url, {
     method: "GET",
@@ -241,7 +280,7 @@ export async function apiGetFile(path, opts = {}) {
     credentials: "include",
   });
 
-  if (res.status === 401) localStorage.clear();
+  if (res.status === 401) try { localStorage.clear(); } catch {}
   if (res.status === 403 && on403 === "silent") throw new Error("Sem permissão.");
 
   if (!res.ok) {
