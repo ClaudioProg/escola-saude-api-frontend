@@ -3,7 +3,7 @@
 // 🔧 Base URL vinda do .env (Vite). Ex.: https://escola-saude-api.onrender.com/api
 const RAW_BASE = (import.meta.env.VITE_API_BASE_URL || "").trim();
 // remove barras finais da base (fica sem trailing slash)
-let API_BASE_URL = RAW_BASE.replace(/\/+$/, "");
+export let API_BASE_URL = RAW_BASE.replace(/\/+$/, "");
 const IS_DEV = !!import.meta.env.DEV;
 
 /* ──────────────────────────────────────────────────────────────────

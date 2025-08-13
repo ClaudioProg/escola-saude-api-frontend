@@ -70,7 +70,7 @@ export default function Navbar() {
 
   const [notificacoes, setNotificacoes] = useState([]);
   useEffect(() => {
-    apiGet("/api/notificacoes")
+    apiGet("/notificacoes")
       .then((data) => setNotificacoes(data || []))
       .catch(() => setNotificacoes([]));
   }, []);
@@ -131,7 +131,7 @@ export default function Navbar() {
   // 🔄 Atualiza contador de notificações não lidas (usa apiGet)
   async function atualizarContadorNotificacoes() {
     try {
-      const data = await apiGet("/api/notificacoes/nao-lidas/contagem");
+      const data = await apiGet("/notificacoes/nao-lidas/contagem");
       setTotalNaoLidas(data?.totalNaoLidas ?? data?.total ?? 0);
     } catch {
       setTotalNaoLidas(0);

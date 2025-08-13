@@ -6,7 +6,7 @@ import { CalendarDays, BookOpen, FileText, Presentation } from "lucide-react";
 import NadaEncontrado from "../components/NadaEncontrado";
 import GraficoEventos from "../components/GraficoEventos";
 import GraficoAvaliacoes from "../components/GraficoAvaliacoes";
-import { apiGet } from "../services/api"; // ✅ usar serviço centralizado
+import { apiGet, API_BASE_URL } from "../services/api"; // ✅ usar serviço centralizado
 import { formatarDataBrasileira } from "../utils/data"; // opcional p/ datas de notificações
 
 export default function DashboardUsuario() {
@@ -18,7 +18,7 @@ export default function DashboardUsuario() {
     async function carregar() {
       try {
         console.log("🔑 Token (automático via apiGet). Buscando dashboard…");
-        const data = await apiGet("/api/dashboard-usuario");
+        const data = await apiGet("/dashboard-usuario");
         console.log("📊 Dados recebidos do dashboard:", data);
         setDados(data);
       } catch (err) {
