@@ -13,6 +13,11 @@ const IS_DEV = !!import.meta.env.DEV;
   const proto = typeof window !== "undefined" ? window.location.protocol : "n/a";
   const host  = typeof window !== "undefined" ? window.location.host      : "n/a";
 
+  // 🔒 blindagem extra: se vier http:// na base, troca pra https:// SEMPRE
+  if (API_BASE_URL.startsWith("http://")) {
+    API_BASE_URL = API_BASE_URL.replace(/^http:\/\//, "https://");
+  }
+
   console.info("[API:init] base:", API_BASE_URL || "(vazia)", {
     protocol: proto,
     host,
@@ -21,29 +26,8 @@ const IS_DEV = !!import.meta.env.DEV;
 
   if (!API_BASE_URL) {
     const msg = "[API:init] VITE_API_BASE_URL vazia.";
-    if (IS_DEV) {
-      console.warn(`${msg} Em dev você pode usar rewrites locais; em prod isso causará 404.`);
-    } else {
-      console.error(`${msg} Em produção isto levará a 404. Defina a variável de ambiente.`);
-    }
-  }
-
-  if (API_BASE_URL.startsWith("http://")) {
-    if (IS_DEV) {
-      console.warn("[API:init] VITE_API_BASE_URL usa http:// → convertendo para https:// (dev only).");
-      API_BASE_URL = API_BASE_URL.replace(/^http:\/\//, "https://");
-    } else {
-      console.error("[API:init] VITE_API_BASE_URL usa http://. Em páginas https isso causa Mixed Content. Use https:// na base.");
-    }
-  }
-
-  if (typeof window !== "undefined" && window.location.protocol === "https:" && API_BASE_URL.startsWith("http://")) {
-    console.error("[API:init] Mixed Content iminente: página https com API http.");
-  }
-
-  if (!IS_DEV && !API_BASE_URL) {
-    // Em produção, sem base definida, falha cedo para não fazer chamadas relativas
-    throw new Error("VITE_API_BASE_URL ausente em produção.");
+    if (!IS_DEV) throw new Error("VITE_API_BASE_URL ausente em produção.");
+    console.warn(`${msg} Em dev dá pra usar rewrites; em prod causará 404.`);
   }
 })();
 
@@ -88,7 +72,7 @@ class ApiError extends Error {
 // 🧼 Normalizador de path: garante "/" inicial, remove prefixo "/api"
 function normalizePath(path) {
   if (!path) return "/";
-  // Se vier URL absoluta, respeita (override da base)
+  // Se vier URL absoluta, respeita (override da base) e força https
   if (/^https?:\/\//i.test(path)) return path.replace(/^http:\/\//i, "https://");
 
   let p = String(path);
@@ -111,7 +95,6 @@ async function handle(res, { on401 = "redirect", on403 = "silent" } = {}) {
 
   try { data = text ? JSON.parse(text) : null; } catch { data = null; }
 
-  // Log de resposta (em dev detalhado; em prod só erros)
   if (IS_DEV) {
     const preview = data ?? text ?? "";
     console[(res.ok ? "log" : "warn")](
@@ -152,16 +135,19 @@ async function doFetch(path, { method = "GET", auth = true, headers, query, body
   const safePath = normalizePath(path);
 
   // Monta URL final:
-  // - Se safePath for absoluto (https://...), usa direto
-  // - Caso contrário, concatena com a base
   const isAbsolute = /^https?:\/\//i.test(safePath);
-  const base = isAbsolute ? "" : (API_BASE_URL || ""); // em dev permite vazio p/ rewrites
-  const url = `${base}${safePath}${qs(query)}`;
+  const base = isAbsolute ? "" : (API_BASE_URL || "");
+  let url = `${base}${safePath}${qs(query)}`;
+
+  // 🔒 blindagem final: qualquer URL http:// vira https://
+  if (url.startsWith("http://")) {
+    url = url.replace(/^http:\/\//, "https://");
+  }
 
   const init = {
     method,
     headers: buildHeaders(auth, headers),
-    credentials: "include", // cookies entre domínios (ok se API permitir)
+    credentials: "include",
   };
 
   if (body instanceof FormData) {
@@ -175,7 +161,6 @@ async function doFetch(path, { method = "GET", auth = true, headers, query, body
     init.body = body ? JSON.stringify(body) : undefined;
   }
 
-  // LOG DA REQUEST (sempre; sem vazar token)
   const hasAuth = !!init.headers?.Authorization;
   const headersPreview = { ...init.headers };
   if (headersPreview.Authorization) headersPreview.Authorization = "Bearer ***";
@@ -185,9 +170,6 @@ async function doFetch(path, { method = "GET", auth = true, headers, query, body
     headers: headersPreview,
     body: body instanceof FormData ? "[FormData]" : body,
   });
-  if (url.startsWith("http://")) {
-    console.warn("[API] URL HTTP detectada (risco Mixed Content):", url);
-  }
 
   let res;
   const t0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
@@ -224,7 +206,8 @@ export async function apiPostFile(path, body, opts = {}) {
   const safePath = normalizePath(path);
   const isAbsolute = /^https?:\/\//i.test(safePath);
   const base = isAbsolute ? "" : (API_BASE_URL || "");
-  const url = `${base}${safePath}${qs(query)}`;
+  let url = `${base}${safePath}${qs(query)}`;
+  if (url.startsWith("http://")) url = url.replace(/^http:\/\//, "https://");
 
   const res = await fetch(url, {
     method: "POST",
@@ -268,7 +251,8 @@ export async function apiGetFile(path, opts = {}) {
   const safePath = normalizePath(path);
   const isAbsolute = /^https?:\/\//i.test(safePath);
   const base = isAbsolute ? "" : (API_BASE_URL || "");
-  const url = `${base}${safePath}${qs(query)}`;
+  let url = `${base}${safePath}${qs(query)}`;
+  if (url.startsWith("http://")) url = url.replace(/^http:\/\//, "https://");
 
   const res = await fetch(url, {
     method: "GET",
