@@ -1,13 +1,65 @@
 // 📁 src/services/api.js
 
-// Base URL: usa .env (Vite) ou vazio para proxy do frontend
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+// ───────────────────────────────────────────────────────────────────
+// Helpers de ambiente
+// ───────────────────────────────────────────────────────────────────
 const IS_DEV = !!import.meta.env.DEV;
 
-// Lê o token do storage
-const getToken = () => localStorage.getItem("token");
+function isLocalHost(h) {
+  return /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(h || "");
+}
+function isHttpUrl(u) { return /^http:\/\//i.test(u || ""); }
+function isHttpsUrl(u) { return /^https:\/\//i.test(u || ""); }
 
-// 🔧 Monta headers padrão; não define Authorization se auth=false ou sem token
+// Decide a base automaticamente:
+//   1) VITE_API_BASE_URL, se preenchida
+//   2) Se estiver em localhost e você quer usar proxy do Vite, use "/api"
+//   3) Caso contrário, "http://localhost:3000/api"
+function computeBase() {
+  const raw = (import.meta.env.VITE_API_BASE_URL || "").trim().replace(/\/+$/, "");
+  if (raw) return raw;
+
+  if (typeof window !== "undefined" && isLocalHost(window.location.host)) {
+    // Se tiver proxy no vite.config.js, prefira "/api"
+    // server: { proxy: { '/api': { target: 'http://localhost:3000' } } }
+    if (import.meta.env.VITE_USE_VITE_PROXY === "1") return "/api";
+    return "http://localhost:3000/api";
+  }
+
+  // Fallback seguro em prod (pode ajustar para sua URL pública)
+  return "https://escola-saude-api.onrender.com/api";
+}
+
+let API_BASE_URL = computeBase();
+
+// 🔒 NÃO force https para localhost (apenas para domínios externos)
+if (isHttpUrl(API_BASE_URL) && !(typeof window !== "undefined" && isLocalHost(new URL(API_BASE_URL).host))) {
+  API_BASE_URL = API_BASE_URL.replace(/^http:\/\//i, "https://");
+}
+
+// Logs de init
+(() => {
+  const proto = typeof window !== "undefined" ? window.location.protocol : "n/a";
+  const host  = typeof window !== "undefined" ? window.location.host      : "n/a";
+
+  console.info("[API:init] base:", API_BASE_URL || "(vazia)", {
+    protocol: proto,
+    host,
+    env: IS_DEV ? "dev" : "prod",
+  });
+
+  if (!API_BASE_URL) {
+    const msg = "[API:init] Base vazia.";
+    if (!IS_DEV) throw new Error("VITE_API_BASE_URL ausente em produção.");
+    console.warn(`${msg} Em dev use proxy do Vite ou .env.local.`);
+  }
+})();
+
+// ───────────────────────────────────────────────────────────────────
+// Token & headers
+// ───────────────────────────────────────────────────────────────────
+const getToken = () => { try { return localStorage.getItem("token"); } catch { return null; } };
+
 function buildHeaders(auth = true, extra = {}) {
   const token = getToken();
   return {
@@ -17,7 +69,9 @@ function buildHeaders(auth = true, extra = {}) {
   };
 }
 
-// 🔗 Helper de querystring (ignora undefined/null/"")
+// ───────────────────────────────────────────────────────────────────
+// Querystring
+// ───────────────────────────────────────────────────────────────────
 export function qs(params = {}) {
   const q = new URLSearchParams();
   Object.entries(params || {}).forEach(([k, v]) => {
@@ -27,7 +81,9 @@ export function qs(params = {}) {
   return s ? `?${s}` : "";
 }
 
-// 🧱 Erro enriquecido
+// ───────────────────────────────────────────────────────────────────
+// Erro enriquecido
+// ───────────────────────────────────────────────────────────────────
 class ApiError extends Error {
   constructor(message, { status, url, data } = {}) {
     super(message);
@@ -38,65 +94,55 @@ class ApiError extends Error {
   }
 }
 
-// 🛰️ Handler centralizado: tenta parsear JSON; diferencia 401 x 403
+// ───────────────────────────────────────────────────────────────────
+// Path normalizer
+// ───────────────────────────────────────────────────────────────────
+function normalizePath(path) {
+  if (!path) return "/";
+  if (/^https?:\/\//i.test(path)) return path; // absoluta → respeita
+  let p = String(path);
+  if (!p.startsWith("/")) p = `/${p}`;
+  p = p.replace(/^\/+api\/?/, "/"); // evita duplicar /api
+  return "/" + p.replace(/^\/+/, "");
+}
+
+// ───────────────────────────────────────────────────────────────────
+// Handler centralizado
+// ───────────────────────────────────────────────────────────────────
 async function handle(res, { on401 = "redirect", on403 = "silent" } = {}) {
   const url = res?.url || "";
   const status = res?.status;
   let text = "";
   let data = null;
 
-  try {
-    text = await res.text(); // body só pode ser lido uma vez
-  } catch {
-    // ignore
-  }
+  try { text = await res.text(); } catch {}
+  try { data = text ? JSON.parse(text) : null; } catch { data = null; }
 
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = null; // não era JSON
-  }
-
-  // Log de resposta
   if (IS_DEV) {
     const preview = data ?? text ?? "";
     console[(res.ok ? "log" : "warn")](
-      `🛬 [${status}] ${url}`,
+      `🛬 [resp ${status}] ${url}`,
       typeof preview === "string" ? preview.slice(0, 500) : preview
     );
+  } else if (!res.ok) {
+    console.warn(`🛬 [resp ${status}] ${url}`);
   }
 
-  // Tratamento específico por status
   if (status === 401) {
-    // sessão expirada / token inválido
     if (IS_DEV) console.error("⚠️ 401 recebido: limpando sessão");
-    localStorage.clear();
-    if (on401 === "redirect") {
-      // evita loop caso já esteja na página de login
-      if (!location.pathname.startsWith("/login")) {
-        window.location.assign("/login");
-      }
+    try { localStorage.clear(); } catch {}
+    if (on401 === "redirect" && typeof window !== "undefined" && !location.pathname.startsWith("/login")) {
+      window.location.assign("/login");
     }
-    throw new ApiError(data?.erro || data?.message || "Não autorizado (401)", {
-      status,
-      url,
-      data: data ?? text,
-    });
+    throw new ApiError(data?.erro || data?.message || "Não autorizado (401)", { status, url, data: data ?? text });
   }
 
   if (status === 403) {
-    // sem permissão (NÃO limpar sessão)
     if (IS_DEV) console.warn("🚫 403 recebido: sem permissão");
-    if (on403 === "redirect") {
-      if (location.pathname !== "/dashboard") {
-        window.location.assign("/dashboard");
-      }
+    if (on403 === "redirect" && typeof window !== "undefined" && location.pathname !== "/dashboard") {
+      window.location.assign("/dashboard");
     }
-    throw new ApiError(data?.erro || data?.message || "Sem permissão (403)", {
-      status,
-      url,
-      data: data ?? text,
-    });
+    throw new ApiError(data?.erro || data?.message || "Sem permissão (403)", { status, url, data: data ?? text });
   }
 
   if (!res.ok) {
@@ -107,9 +153,23 @@ async function handle(res, { on401 = "redirect", on403 = "silent" } = {}) {
   return data;
 }
 
-// 🌐 Wrapper de fetch com log de request
+// ───────────────────────────────────────────────────────────────────
+// Fetch centralizado
+// ───────────────────────────────────────────────────────────────────
 async function doFetch(path, { method = "GET", auth = true, headers, query, body, on401, on403 } = {}) {
-  const url = `${API_BASE_URL}${path}${qs(query)}`;
+  const safePath = normalizePath(path);
+
+  // Monta URL final
+  const isAbsolute = /^https?:\/\//i.test(safePath);
+  let url = `${isAbsolute ? "" : API_BASE_URL}${safePath}${qs(query)}`;
+
+  // ⚠️ NÃO subir http → https para localhost
+  try {
+    if (isHttpUrl(url)) {
+      const host = new URL(url).host;
+      if (!isLocalHost(host)) url = url.replace(/^http:\/\//i, "https://");
+    }
+  } catch {}
 
   const init = {
     method,
@@ -118,7 +178,6 @@ async function doFetch(path, { method = "GET", auth = true, headers, query, body
   };
 
   if (body instanceof FormData) {
-    // Upload: NÃO definir Content-Type manualmente
     const token = getToken();
     init.headers = {
       ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),
@@ -129,60 +188,59 @@ async function doFetch(path, { method = "GET", auth = true, headers, query, body
     init.body = body ? JSON.stringify(body) : undefined;
   }
 
-  if (IS_DEV) {
-    const preview = body instanceof FormData ? "[FormData]" : body;
-    console.log(`🛫 [${method}] ${url}`, { headers: init.headers, body: preview });
-  }
+  const hasAuth = !!init.headers?.Authorization;
+  const headersPreview = { ...init.headers };
+  if (headersPreview.Authorization) headersPreview.Authorization = "Bearer ***";
+  console.log(`🛫 [req ${method}] ${url}`, {
+    auth: auth ? "on" : "off",
+    hasAuthHeader: hasAuth,
+    headers: headersPreview,
+    body: body instanceof FormData ? "[FormData]" : body,
+  });
 
   let res;
+  const t0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
   try {
     res = await fetch(url, init);
   } catch (networkErr) {
-    // Erro de rede (CORS, queda, DNS…)
-    if (IS_DEV) console.error("🌩️ Erro de rede:", networkErr?.message || networkErr);
+    const t1 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+    console.error(`🌩️ [neterr ${method}] ${url} (${Math.round(t1 - t0)}ms):`, networkErr?.message || networkErr);
     throw new ApiError("Falha de rede ou CORS", { status: 0, url, data: networkErr });
   }
+  const t1 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+  console.log(`⏱️ [time ${method}] ${url} → ${Math.round(t1 - t0)}ms`);
 
   return handle(res, { on401, on403 });
 }
 
-// -------- Métodos HTTP --------
+// ───────────────────────────────────────────────────────────────────
+// Métodos HTTP
+// ───────────────────────────────────────────────────────────────────
+export async function apiGet(path, opts = {})         { return doFetch(path, { method: "GET",    ...opts }); }
+export async function apiPost(path, body, opts = {})  { return doFetch(path, { method: "POST",  body, ...opts }); }
+export async function apiPut(path, body, opts = {})   { return doFetch(path, { method: "PUT",   body, ...opts }); }
+export async function apiPatch(path, body, opts = {}) { return doFetch(path, { method: "PATCH", body, ...opts }); }
+export async function apiDelete(path, opts = {})      { return doFetch(path, { method: "DELETE",       ...opts }); }
 
-// GET: opts = { auth, headers, query, on401, on403 }
-export async function apiGet(path, opts = {}) {
-  return doFetch(path, { method: "GET", ...opts });
-}
-
-// POST: corpo JSON
-export async function apiPost(path, body, opts = {}) {
-  return doFetch(path, { method: "POST", body, ...opts });
-}
-
-// PUT: corpo JSON
-export async function apiPut(path, body, opts = {}) {
-  return doFetch(path, { method: "PUT", body, ...opts });
-}
-
-// PATCH: corpo JSON
-export async function apiPatch(path, body, opts = {}) {
-  return doFetch(path, { method: "PATCH", body, ...opts });
-}
-
-// DELETE
-export async function apiDelete(path, opts = {}) {
-  return doFetch(path, { method: "DELETE", ...opts });
-}
-
-// Upload multipart: passe um FormData; NÃO definimos Content-Type manualmente
+// Upload multipart
 export async function apiUpload(path, formData, opts = {}) {
   return doFetch(path, { method: "POST", body: formData, ...opts });
 }
 
-// POST que retorna arquivo (Blob). Lê Content-Disposition p/ sugerir nome.
+// POST que retorna arquivo (Blob)
 export async function apiPostFile(path, body, opts = {}) {
   const { auth = true, headers, query, on403 = "silent" } = opts;
-  const token = localStorage.getItem("token");
-  const url = `${API_BASE_URL}${path}${qs(query)}`;
+  const token = getToken();
+
+  const safePath = normalizePath(path);
+  const isAbsolute = /^https?:\/\//i.test(safePath);
+  let url = `${isAbsolute ? "" : API_BASE_URL}${safePath}${qs(query)}`;
+  try {
+    if (isHttpUrl(url)) {
+      const host = new URL(url).host;
+      if (!isLocalHost(host)) url = url.replace(/^http:\/\//i, "https://");
+    }
+  } catch {}
 
   const res = await fetch(url, {
     method: "POST",
@@ -196,16 +254,10 @@ export async function apiPostFile(path, body, opts = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  // trata 401/403 sem quebrar a tela
-  if (res.status === 401) {
-    localStorage.clear();
-  }
-  if (res.status === 403 && on403 === "silent") {
-    throw new Error("Sem permissão.");
-  }
+  if (res.status === 401) try { localStorage.clear(); } catch {}
+  if (res.status === 403 && on403 === "silent") throw new Error("Sem permissão.");
 
   if (!res.ok) {
-    // tenta ler mensagem de erro do backend
     let msg = `HTTP ${res.status}`;
     try {
       const txt = await res.text();
@@ -217,10 +269,58 @@ export async function apiPostFile(path, body, opts = {}) {
   }
 
   const blob = await res.blob();
-  // tenta extrair filename do header
   const cd = res.headers.get("Content-Disposition") || "";
   const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i);
   const filename = m ? decodeURIComponent(m[1]) : undefined;
 
   return { blob, filename };
 }
+
+// GET que retorna arquivo (Blob)
+export async function apiGetFile(path, opts = {}) {
+  const { auth = true, headers, query, on403 = "silent" } = opts;
+  const token = getToken();
+
+  const safePath = normalizePath(path);
+  const isAbsolute = /^https?:\/\//i.test(safePath);
+  let url = `${isAbsolute ? "" : API_BASE_URL}${safePath}${qs(query)}`;
+  try {
+    if (isHttpUrl(url)) {
+      const host = new URL(url).host;
+      if (!isLocalHost(host)) url = url.replace(/^http:\/\//i, "https://");
+    }
+  } catch {}
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),
+      Accept: "*/*",
+      ...headers,
+    },
+    credentials: "include",
+  });
+
+  if (res.status === 401) try { localStorage.clear(); } catch {}
+  if (res.status === 403 && on403 === "silent") throw new Error("Sem permissão.");
+
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const txt = await res.text();
+      msg = txt || msg;
+      const json = JSON.parse(txt);
+      msg = json?.erro || json?.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition") || "";
+  const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i);
+  const filename = m ? decodeURIComponent(m[1]) : undefined;
+
+  return { blob, filename };
+}
+
+export { API_BASE_URL }; // opcional, caso queira debugar

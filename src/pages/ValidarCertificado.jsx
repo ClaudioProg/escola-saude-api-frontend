@@ -1,10 +1,12 @@
+// 📁 src/pages/ValidarCertificado.jsx
 import { useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import BotaoPrimario from "../components/BotaoPrimario";
 import NadaEncontrado from "../components/NadaEncontrado";
 import CarregandoSkeleton from "../components/CarregandoSkeleton";
-import { formatarDataHoraBrasileira } from "../utils/data"; // <-- utilitário
+import { formatarDataHoraBrasileira } from "../utils/data";
+import { apiGet } from "../services/api"; // ✅ cliente central
 
 export default function ValidarCertificado() {
   const [searchParams] = useSearchParams();
@@ -13,10 +15,12 @@ export default function ValidarCertificado() {
   const [dataHora, setDataHora] = useState("");
   const [carregando, setCarregando] = useState(true);
 
-  const evento = searchParams.get("evento");
-  const usuario = searchParams.get("usuario");
+  // normaliza parâmetros (evita espaços e null)
+  const evento = (searchParams.get("evento") || "").trim();
+  const usuario = (searchParams.get("usuario") || "").trim();
 
   useEffect(() => {
+    // apenas exibição local do momento da verificação (não usa UTC)
     setDataHora(formatarDataHoraBrasileira(new Date()));
 
     if (!evento || !usuario) {
@@ -26,22 +30,33 @@ export default function ValidarCertificado() {
       return;
     }
 
-    fetch(`https://escola-saude-api.onrender.com/api/presencas/validar?evento=${evento}&usuario=${usuario}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.presente) {
+    (async () => {
+      try {
+        // suporte a diferentes formatos de resposta do backend
+        const data = await apiGet("/api/presencas/validar", {
+          on403: "silent",
+          query: { evento, usuario },
+        });
+
+        const presente =
+          data?.presente ??
+          data?.ok ??
+          (typeof data?.status === "string" && data.status.toLowerCase() === "ok");
+
+        if (presente) {
           setMensagem("✅ Presença confirmada! Você pode emitir seu certificado.");
           setStatus("sucesso");
         } else {
           setMensagem("❌ Presença ainda não registrada para este evento.");
           setStatus("pendente");
         }
-      })
-      .catch(() => {
+      } catch (e) {
         setMensagem("❌ Erro ao validar presença. Tente novamente mais tarde.");
         setStatus("erro");
-      })
-      .finally(() => setCarregando(false));
+      } finally {
+        setCarregando(false);
+      }
+    })();
   }, [evento, usuario]);
 
   const corMensagem =
@@ -69,30 +84,25 @@ export default function ValidarCertificado() {
         aria-label="Validação de Presença"
         aria-busy={carregando}
       >
-        {/* Cabeçalho com logotipo e título */}
+        {/* Cabeçalho */}
         <div className="flex flex-col items-center mb-8" role="banner">
           <img
             src="/LogoEscola.png"
             alt="Logotipo da Escola da Saúde de Santos"
             className="h-24 mb-4 drop-shadow print:hidden"
           />
-          <h1
-            className="text-3xl font-bold text-blue-700 dark:text-white print:text-black"
-            role="heading"
-          >
+          <h1 className="text-3xl font-bold text-blue-700 dark:text-white print:text-black">
             Escola da Saúde - Santos
           </h1>
-          <p className="text-gray-600 dark:text-gray-300 print:text-black" aria-label="Subtítulo">
+          <p className="text-gray-600 dark:text-gray-300 print:text-black">
             Validação de Presença em Evento
           </p>
         </div>
 
-        {/* Loader enquanto aguarda resposta */}
         {carregando ? (
           <CarregandoSkeleton height="120px" />
         ) : (
           <>
-            {/* Mensagem principal */}
             <p
               className={`text-xl font-semibold mb-6 text-center transition-colors duration-200 ${
                 status === "sucesso" ? "animate-pulse" : ""
@@ -102,7 +112,6 @@ export default function ValidarCertificado() {
               {mensagem}
             </p>
 
-            {/* Página elegante de erro ou pendente */}
             {(status === "erro" || status === "pendente") && (
               <NadaEncontrado
                 mensagem={mensagem}
@@ -110,20 +119,14 @@ export default function ValidarCertificado() {
               />
             )}
 
-            {/* Botão de impressão */}
             {status === "sucesso" && (
               <div className="flex justify-center print:hidden">
-                <BotaoPrimario
-                  onClick={() => window.print()}
-                  aria-label="Imprimir esta página"
-                  role="button"
-                >
+                <BotaoPrimario onClick={() => window.print()} aria-label="Imprimir esta página">
                   🖨️ Imprimir esta página
                 </BotaoPrimario>
               </div>
             )}
 
-            {/* Rodapé com data/hora */}
             {dataHora && (
               <footer className="mt-10 text-sm text-gray-500 text-center print:mt-20 print:text-black print:text-xs w-full">
                 Verificação realizada em: <strong>{dataHora}</strong>

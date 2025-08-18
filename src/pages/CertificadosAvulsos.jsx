@@ -1,7 +1,19 @@
+// 📁 src/pages/CertificadosAvulsos.jsx
 import { useEffect, useState } from "react";
-import axios from "axios";
 import { toast } from "react-toastify";
 import BotaoPrimario from "../components/BotaoPrimario";
+import { apiGet, apiPost, apiGetFile, API_BASE_URL } from "../services/api";
+
+// helpers anti-fuso: convertem string yyyy-mm-dd sem usar Date()
+function ymdToBR(ymd) {
+  if (!ymd) return "";
+  const m = String(ymd).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return String(ymd);
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+function validYMD(s) {
+  return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
 
 export default function CertificadosAvulsos() {
   const [form, setForm] = useState({
@@ -18,15 +30,23 @@ export default function CertificadosAvulsos() {
   const [carregando, setCarregando] = useState(false);
   const [filtro, setFiltro] = useState("todos");
 
+  useEffect(() => {
+    console.log("[CertificadosAvulsos] API_BASE_URL em uso:", API_BASE_URL || "(vazio → relativo)");
+  }, []);
+
   function handleChange(e) {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
   }
 
   async function carregarCertificados() {
     try {
-      const resposta = await axios.get("/api/certificados-avulsos");
-      setLista(resposta.data);
+      console.log("[CertificadosAvulsos] GET /api/certificados-avulsos");
+      const data = await apiGet("/api/certificados-avulsos");
+      setLista(Array.isArray(data) ? data : []);
+      console.log("[CertificadosAvulsos] lista carregada:", data?.length ?? 0);
     } catch (erro) {
+      console.error("[CertificadosAvulsos] erro ao carregar:", erro);
       toast.error("❌ Erro ao carregar certificados.");
     }
   }
@@ -37,10 +57,43 @@ export default function CertificadosAvulsos() {
 
   async function cadastrarCertificado(e) {
     e.preventDefault();
+    // validações básicas
+    const payload = {
+      nome: form.nome.trim(),
+      cpf: form.cpf.trim(),
+      email: form.email.trim(),
+      curso: form.curso.trim(),
+      carga_horaria: Number(form.carga_horaria),
+      data_inicio: form.data_inicio, // inputs type=date já entregam yyyy-mm-dd
+      data_fim: form.data_fim || form.data_inicio,
+    };
+
+    if (!payload.nome || !payload.email || !payload.curso || !payload.carga_horaria) {
+      toast.warning("Preencha todos os campos obrigatórios.");
+      return;
+    }
+    if (Number.isNaN(payload.carga_horaria) || payload.carga_horaria <= 0) {
+      toast.warning("Informe uma carga horária válida (> 0).");
+      return;
+    }
+    if (payload.data_inicio && !validYMD(payload.data_inicio)) {
+      toast.warning("Data de início inválida.");
+      return;
+    }
+    if (payload.data_fim && !validYMD(payload.data_fim)) {
+      toast.warning("Data de término inválida.");
+      return;
+    }
+    if (payload.data_inicio && payload.data_fim && payload.data_fim < payload.data_inicio) {
+      toast.warning("A data de término não pode ser anterior à data de início.");
+      return;
+    }
+
     setCarregando(true);
     try {
-      const resposta = await axios.post("/api/certificados-avulsos", form);
-      setLista((prev) => [resposta.data, ...prev]);
+      console.log("[CertificadosAvulsos] POST /api/certificados-avulsos payload:", payload);
+      const novo = await apiPost("/api/certificados-avulsos", payload);
+      setLista((prev) => [novo, ...prev]);
       toast.success("✅ Certificado cadastrado.");
       setForm({
         nome: "",
@@ -52,6 +105,7 @@ export default function CertificadosAvulsos() {
         data_fim: "",
       });
     } catch (erro) {
+      console.error("[CertificadosAvulsos] erro ao cadastrar:", erro);
       toast.error("❌ Erro ao cadastrar certificado.");
     } finally {
       setCarregando(false);
@@ -60,23 +114,33 @@ export default function CertificadosAvulsos() {
 
   async function enviarPorEmail(id) {
     try {
+      console.log("[CertificadosAvulsos] POST /api/certificados-avulsos/:id/enviar →", id);
       toast.info("📤 Enviando...");
-      await axios.post(`/api/certificados-avulsos/${id}/enviar`);
+      await apiPost(`/api/certificados-avulsos/${id}/enviar`);
       toast.success("✅ E-mail enviado!");
       setLista((prev) =>
-        prev.map((item) =>
-          item.id === id ? { ...item, enviado: true } : item
-        )
+        prev.map((item) => (item.id === id ? { ...item, enviado: true } : item))
       );
     } catch (erro) {
+      console.error("[CertificadosAvulsos] erro ao enviar e-mail:", erro);
       toast.error("❌ Erro ao enviar e-mail.");
     }
   }
 
   async function gerarPDF(id) {
     try {
-      window.open(`/api/certificados-avulsos/${id}/pdf`, "_blank");
+      console.log("[CertificadosAvulsos] GET(BLOB) /api/certificados-avulsos/:id/pdf →", id);
+      const { blob, filename } = await apiGetFile(`/api/certificados-avulsos/${id}/pdf`);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || `certificado_${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
     } catch (erro) {
+      console.error("[CertificadosAvulsos] erro ao gerar PDF:", erro);
       toast.error("❌ Erro ao gerar PDF.");
     }
   }
@@ -92,18 +156,18 @@ export default function CertificadosAvulsos() {
       <h1 className="text-xl font-bold mb-4">Certificados Avulsos</h1>
 
       <form
-  onSubmit={cadastrarCertificado}
-  className="grid gap-4 grid-cols-1 md:grid-cols-2 bg-white p-4 shadow rounded-lg"
->
-  <input
-    type="text"
-    name="nome"
-    placeholder="Nome"
-    value={form.nome}
-    onChange={handleChange}
-    required
-    className="border p-2 rounded col-span-2"
-  />
+        onSubmit={cadastrarCertificado}
+        className="grid gap-4 grid-cols-1 md:grid-cols-2 bg-white p-4 shadow rounded-lg"
+      >
+        <input
+          type="text"
+          name="nome"
+          placeholder="Nome"
+          value={form.nome}
+          onChange={handleChange}
+          required
+          className="border p-2 rounded col-span-2"
+        />
         <input
           type="text"
           name="cpf"
@@ -137,6 +201,7 @@ export default function CertificadosAvulsos() {
           value={form.carga_horaria}
           onChange={handleChange}
           required
+          min={1}
           className="border p-2 rounded"
         />
         <input
@@ -180,67 +245,66 @@ export default function CertificadosAvulsos() {
         </select>
       </div>
 
-<h2 className="text-lg font-semibold mb-2">Certificados Cadastrados</h2>
+      <h2 className="text-lg font-semibold mb-2">Certificados Cadastrados</h2>
 
-<div className="overflow-x-auto">
-  <table className="w-full text-sm border">
-    <thead>
-      <tr className="bg-gray-100">
-        <th className="p-2 border">Nome</th>
-        <th className="p-2 border">Curso</th>
-        <th className="p-2 border">E-mail</th>
-        <th className="p-2 border">Carga Horária</th>
-        <th className="p-2 border">Período</th>
-        <th className="p-2 border">Ações</th>
-      </tr>
-    </thead>
-    <tbody>
-      {listaFiltrada.length === 0 && (
-        <tr>
-          <td colSpan={6} className="p-4 text-center text-gray-500">
-            Nenhum certificado cadastrado.
-          </td>
-        </tr>
-      )}
-      {listaFiltrada.map((item) => {
-        const formatarData = (data) => {
-          if (!data) return "";
-          return new Date(data).toLocaleDateString("pt-BR");
-        };
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="p-2 border">Nome</th>
+              <th className="p-2 border">Curso</th>
+              <th className="p-2 border">E-mail</th>
+              <th className="p-2 border">Carga Horária</th>
+              <th className="p-2 border">Período</th>
+              <th className="p-2 border">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {listaFiltrada.length === 0 && (
+              <tr>
+                <td colSpan={6} className="p-4 text-center text-gray-500">
+                  Nenhum certificado cadastrado.
+                </td>
+              </tr>
+            )}
 
-        const periodo = item.data_inicio
-          ? item.data_fim && item.data_fim !== item.data_inicio
-            ? `${formatarData(item.data_inicio)} a ${formatarData(item.data_fim)}`
-            : formatarData(item.data_inicio)
-          : "-";
+            {listaFiltrada.map((item) => {
+              const di = item.data_inicio?.slice(0, 10) || "";
+              const df = item.data_fim?.slice(0, 10) || "";
 
-        return (
-          <tr key={item.id} className="border-t">
-            <td className="p-2">{item.nome}</td>
-            <td className="p-2">{item.curso}</td>
-            <td className="p-2">{item.email}</td>
-            <td className="p-2 text-center">{item.carga_horaria}h</td>
-            <td className="p-2 text-center">{periodo}</td>
-            <td className="p-2 flex gap-2 justify-center">
-              <button
-                onClick={() => gerarPDF(item.id)}
-                className="text-blue-600 underline"
-              >
-                PDF
-              </button>
-              <button
-                onClick={() => enviarPorEmail(item.id)}
-                className="text-green-600 underline"
-              >
-                {item.enviado ? "Reenviar" : "Enviar"}
-              </button>
-            </td>
-          </tr>
-        );
-      })}
-    </tbody>
-  </table>
-</div>
+              const periodo = di
+                ? df && df !== di
+                  ? `${ymdToBR(di)} a ${ymdToBR(df)}`
+                  : ymdToBR(di)
+                : "-";
+
+              return (
+                <tr key={item.id} className="border-t">
+                  <td className="p-2">{item.nome}</td>
+                  <td className="p-2">{item.curso}</td>
+                  <td className="p-2">{item.email}</td>
+                  <td className="p-2 text-center">{item.carga_horaria}h</td>
+                  <td className="p-2 text-center">{periodo}</td>
+                  <td className="p-2 flex gap-2 justify-center">
+                    <button
+                      onClick={() => gerarPDF(item.id)}
+                      className="text-blue-600 underline"
+                    >
+                      PDF
+                    </button>
+                    <button
+                      onClick={() => enviarPorEmail(item.id)}
+                      className="text-green-600 underline"
+                    >
+                      {item.enviado ? "Reenviar" : "Enviar"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

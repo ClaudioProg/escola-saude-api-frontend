@@ -1,5 +1,5 @@
 // 📁 src/pages/HistoricoEventos.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,9 +11,19 @@ import BotaoSecundario from "../components/BotaoSecundario";
 import CarregandoSkeleton from "../components/CarregandoSkeleton";
 import CabecalhoPainel from "../components/CabecalhoPainel";
 import { formatarDataBrasileira } from "../utils/data";
-import { apiGet } from "../services/api";
+import { apiGet, apiGetFile } from "../services/api"; // ✅ serviço centralizado
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+// ---------- helpers anti-fuso ----------
+const ymd = (s) => {
+  if (!s) return "";
+  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : "";
+};
+const yearFromYMD = (s) => {
+  const m = ymd(s).match(/^(\d{4})/);
+  return m ? Number(m[1]) : null;
+};
+// --------------------------------------
 
 export default function HistoricoEventos() {
   const [eventos, setEventos] = useState([]);
@@ -38,46 +48,32 @@ export default function HistoricoEventos() {
         setCarregando(false);
       }
     }
-
     fetchEventos();
   }, []);
 
-  const anosDisponiveis = Array.from(
-    new Set(
-      eventos
-        .map((ev) => {
-          const d = ev?.data_inicio ? new Date(ev.data_inicio) : null;
-          return d && !isNaN(d) ? d.getFullYear() : null;
-        })
-        .filter(Boolean)
-    )
-  ).sort((a, b) => b - a);
+  // 🔢 anos disponíveis (sem Date/UTC)
+  const anosDisponiveis = useMemo(() => {
+    const anos = new Set();
+    for (const ev of eventos) {
+      const y = yearFromYMD(ev?.data_inicio);
+      if (y) anos.add(y);
+    }
+    return Array.from(anos).sort((a, b) => b - a);
+  }, [eventos]);
 
-  const eventosFiltrados =
-    anoSelecionado === "todos"
-      ? eventos
-      : eventos.filter((ev) => {
-          const d = ev?.data_inicio ? new Date(ev.data_inicio) : null;
-          return d && !isNaN(d) && String(d.getFullYear()) === String(anoSelecionado);
-        });
+  // 🧮 aplica filtro por ano sem Date/UTC
+  const eventosFiltrados = useMemo(() => {
+    if (anoSelecionado === "todos") return eventos;
+    return eventos.filter((ev) => String(yearFromYMD(ev?.data_inicio)) === String(anoSelecionado));
+  }, [eventos, anoSelecionado]);
 
   async function baixarCertificado(id) {
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/api/certificados/${id}/download`, {
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error();
-
-      const blob = await res.blob();
+      const { blob, filename } = await apiGetFile(`/api/certificados/${id}/download`);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
-      const nomeArquivo =
-        res.headers.get("Content-Disposition")?.match(/filename="?([^"]+)"?/)?.[1] ||
-        `certificado_${id}.pdf`;
       a.href = url;
-      a.download = nomeArquivo;
+      a.download = filename || `certificado_${id}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -121,7 +117,7 @@ export default function HistoricoEventos() {
         {carregando ? (
           <CarregandoSkeleton linhas={4} />
         ) : erro ? (
-          <p className="text-red-500 text-center">{erro}</p>
+          <p className="text-red-500 text-center" aria-live="polite">{erro}</p>
         ) : eventosFiltrados.length === 0 ? (
           <NadaEncontrado
             mensagem="Nenhum evento encontrado para o filtro selecionado."
@@ -136,7 +132,7 @@ export default function HistoricoEventos() {
 
                 return (
                   <motion.li
-                    key={evento.evento_id}
+                    key={evento.evento_id ?? `${evento.titulo}-${evento.data_inicio}`}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}

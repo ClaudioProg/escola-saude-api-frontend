@@ -1,4 +1,4 @@
-// 📁 src/pages/DashboardInstrutor.jsx
+// src/pages/DashboardInstrutor.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -11,11 +11,64 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { QRCodeCanvas } from "qrcode.react";
 import { formatarCPF, formatarDataBrasileira } from "../utils/data";
-import { apiGet } from "../services/api"; // ✅ centralizado
+import { apiGet } from "../services/api";
+
+// ---------- helpers anti-fuso ----------
+const ymd = (s) => (typeof s === "string" ? s.slice(0, 10) : "");
+const toLocalNoon = (ymdStr) => (ymdStr ? new Date(`${ymdStr}T12:00:00`) : null);
+const todayYMD = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+const rangeDiasYMD = (iniYMD, fimYMD) => {
+  const out = [];
+  const d0 = toLocalNoon(iniYMD);
+  const d1 = toLocalNoon(fimYMD || iniYMD);
+  if (!d0 || !d1) return out;
+  for (let d = new Date(d0); d <= d1; d.setDate(d.getDate() + 1)) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    out.push(`${y}-${m}-${day}`);
+  }
+  return out;
+};
+// ---------------------------------------
+
+// 🔎 logger condicional (ligue com: window.DEBUG_DASH_INSTRUTOR = true)
+const dbg = (...args) => {
+  if (typeof window !== "undefined" && window.DEBUG_DASH_INSTRUTOR) {
+    // eslint-disable-next-line no-console
+    console.log("[DashInstrutor]", ...args);
+  }
+};
+const warn = (...args) => {
+  if (typeof window !== "undefined" && window.DEBUG_DASH_INSTRUTOR) {
+    // eslint-disable-next-line no-console
+    console.warn("[DashInstrutor]", ...args);
+  }
+};
+const groupC = (label, fn) => {
+  if (typeof window !== "undefined" && window.DEBUG_DASH_INSTRUTOR && console.groupCollapsed) {
+    console.groupCollapsed(label);
+    try { fn?.(); } finally { console.groupEnd(); }
+  } else {
+    fn?.();
+  }
+};
 
 export default function DashboardInstrutor() {
   const navigate = useNavigate();
-  const usuario = JSON.parse(localStorage.getItem("usuario") || "{}");
+
+  let usuario = {};
+  try {
+    usuario = JSON.parse(localStorage.getItem("usuario") || "{}");
+  } catch (e) {
+    warn("Falha ao ler usuario do localStorage:", e);
+  }
   const nome = usuario?.nome || "";
 
   const [turmas, setTurmas] = useState([]);
@@ -30,49 +83,137 @@ export default function DashboardInstrutor() {
   const [assinatura, setAssinatura] = useState(null);
   const [presencasPorTurma, setPresencasPorTurma] = useState({});
 
-  // 🔄 Presenças (usa apiGet e caminho relativo)
+  // 🔧 contexto/ambiente (aparece uma vez)
+  useEffect(() => {
+    groupC("🧭 Contexto DashboardInstrutor", () => {
+      const token = (() => { try { return localStorage.getItem("token"); } catch { return ""; } })();
+      const shortToken = token ? `${token.slice(0, 12)}…${token.slice(-6)}` : "(sem token)";
+      dbg("origin:", window.location.origin);
+      dbg("VITE_API_BASE_URL:", import.meta.env?.VITE_API_BASE_URL || "(vazio)");
+      dbg("ENV:", import.meta.env?.DEV ? "dev" : "prod");
+      dbg("usuario?.perfil:", usuario?.perfil);
+      dbg("token (curto):", shortToken);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 🔄 Presenças (rota correta + compat legada)
   const carregarPresencas = async (turmaIdRaw) => {
     const turmaId = parseInt(turmaIdRaw);
     if (!turmaId || isNaN(turmaId)) return;
-    try {
-      const data = await apiGet(`/api/relatorio-presencas/turma/${turmaId}`, { on403: "silent" });
-      setPresencasPorTurma((prev) => ({ ...prev, [turmaId]: data }));
-    } catch {
-      toast.error("Erro ao carregar presenças da turma.");
-    }
+
+    groupC(`📦 carregarPresencas(turmaId=${turmaId})`, async () => {
+      try {
+        console.time(`[time GET] /api/presencas/turma/${turmaId}/detalhes`);
+        const data = await apiGet(`/api/presencas/turma/${turmaId}/detalhes`, { on403: "silent" });
+        console.timeEnd(`[time GET] /api/presencas/turma/${turmaId}/detalhes`);
+
+        const datas = Array.isArray(data?.datas) ? data.datas : [];
+        const usuarios = Array.isArray(data?.usuarios) ? data.usuarios : [];
+        const totalDias = datas.length || 0;
+
+        dbg("payload bruta:", data);
+        dbg("datas.length:", datas.length, "usuarios.length:", usuarios.length);
+
+        // ✅ lista “legada”
+        const lista = usuarios.map((u) => {
+          const pres = Array.isArray(u.presencas) ? u.presencas : [];
+          const presentes = pres.filter((p) => p?.presente === true).length;
+          const freq = totalDias > 0 ? Math.round((presentes / totalDias) * 100) : 0;
+          return {
+            usuario_id: u.id,
+            nome: u.nome,
+            cpf: u.cpf,
+            presente: freq >= 75,
+            frequencia: `${freq}%`,
+          };
+        });
+
+        setPresencasPorTurma((prev) => ({
+          ...prev,
+          [turmaId]: {
+            detalhado: { datas, usuarios },
+            lista,
+          },
+        }));
+
+        dbg("📋 detalhado:", { datas, usuarios });
+        dbg("📋 lista compat:", lista);
+      } catch (err) {
+        // detalha erro conhecido do nosso ApiError
+        const info = {
+          name: err?.name,
+          message: err?.message,
+          status: err?.status,
+          url: err?.url,
+          data: err?.data,
+        };
+        console.error("Falha ao carregar presenças:", info);
+        toast.error("Erro ao carregar presenças da turma.");
+        setPresencasPorTurma((prev) => ({
+          ...prev,
+          [turmaId]: { detalhado: { datas: [], usuarios: [] }, lista: [] },
+        }));
+      }
+    });
   };
 
   useEffect(() => {
-    // ❌ Removido: checagem manual de token + navigate('/login')
-    // 🔐 O PrivateRoute já cuida de autenticação/permissão.
-
     (async () => {
-      try {
-        const data = await apiGet("/api/agenda/instrutor", { on403: "silent" });
-        const ordenadas = (Array.isArray(data) ? data : []).sort(
-          (a, b) => new Date(b.data_inicio) - new Date(a.data_inicio)
-        );
-        setTurmas(ordenadas);
-        setErro("");
+      groupC("🚀 useEffect inicial (carregar turmas/assinatura)", async () => {
+        try {
+          console.time("[time GET] /api/agenda/instrutor");
+          const data = await apiGet("/api/agenda/instrutor", { on403: "silent" });
+          console.timeEnd("[time GET] /api/agenda/instrutor");
 
-        ordenadas.forEach((turma) => {
-          if (turma?.id) carregarPresencas(turma.id);
-        });
-      } catch (err) {
-        setErro(err?.message || "Erro ao carregar suas turmas.");
-        toast.error(`❌ ${err?.message || "Erro ao carregar suas turmas."}`);
-      } finally {
-        setCarregando(false);
-      }
+          const arr = Array.isArray(data) ? data : [];
+          dbg("turmas recebidas:", arr.length);
 
-      try {
-        const a = await apiGet("/api/assinatura", { on403: "silent" });
-        setAssinatura(a?.assinatura || null);
-      } catch {
-        setAssinatura(null);
-      }
+          // ordena por data_inicio (meio-dia local) desc
+          const ordenadas = arr.slice().sort((a, b) => {
+            const ad = toLocalNoon(ymd(a.data_inicio));
+            const bd = toLocalNoon(ymd(b.data_inicio));
+            if (!ad && !bd) return 0;
+            if (!ad) return 1;
+            if (!bd) return -1;
+            return bd - ad;
+          });
+          setTurmas(ordenadas);
+          setErro("");
+
+          // carrega presenças por turma (em paralelo, mas com logs por turma)
+          ordenadas.forEach((turma) => {
+            if (turma?.id) carregarPresencas(turma.id);
+          });
+        } catch (err) {
+          const info = {
+            name: err?.name,
+            message: err?.message,
+            status: err?.status,
+            url: err?.url,
+            data: err?.data,
+          };
+          console.error("Erro ao carregar turmas:", info);
+          setErro(err?.message || "Erro ao carregar suas turmas.");
+          toast.error(`❌ ${err?.message || "Erro ao carregar suas turmas."}`);
+        } finally {
+          setCarregando(false);
+        }
+
+        try {
+          console.time("[time GET] /api/assinatura");
+          const a = await apiGet("/api/assinatura", { on403: "silent" });
+          console.timeEnd("[time GET] /api/assinatura");
+          setAssinatura(a?.assinatura || null);
+          dbg("assinatura presente?", !!a?.assinatura);
+        } catch (e) {
+          warn("Não foi possível carregar assinatura:", e?.message || e);
+          setAssinatura(null);
+        }
+      });
     })();
-  }, []); // eslint-disable-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const carregarInscritos = async (turmaIdRaw) => {
     const turmaId = parseInt(turmaIdRaw);
@@ -80,12 +221,25 @@ export default function DashboardInstrutor() {
       toast.error("Erro: Turma inválida.");
       return;
     }
-    try {
-      const data = await apiGet(`/api/inscricoes/turma/${turmaId}`, { on403: "silent" });
-      setInscritosPorTurma((prev) => ({ ...prev, [turmaId]: data }));
-    } catch {
-      toast.error("Erro ao carregar inscritos.");
-    }
+    groupC(`👥 carregarInscritos(turmaId=${turmaId})`, async () => {
+      try {
+        console.time(`[time GET] /api/inscricoes/turma/${turmaId}`);
+        const data = await apiGet(`/api/inscricoes/turma/${turmaId}`, { on403: "silent" });
+        console.timeEnd(`[time GET] /api/inscricoes/turma/${turmaId}`);
+        setInscritosPorTurma((prev) => ({ ...prev, [turmaId]: Array.isArray(data) ? data : [] }));
+        dbg("inscritos:", Array.isArray(data) ? data.length : 0);
+      } catch (err) {
+        const info = {
+          name: err?.name,
+          message: err?.message,
+          status: err?.status,
+          url: err?.url,
+          data: err?.data,
+        };
+        console.error("Erro ao carregar inscritos:", info);
+        toast.error("Erro ao carregar inscritos.");
+      }
+    });
   };
 
   const carregarAvaliacoes = async (turmaIdRaw) => {
@@ -95,154 +249,197 @@ export default function DashboardInstrutor() {
       return;
     }
     if (avaliacoesPorTurma[turmaId]) return;
-    try {
-      const data = await apiGet(`/api/avaliacoes/turma/${turmaId}`, { on403: "silent" });
-      setAvaliacoesPorTurma((prev) => ({ ...prev, [turmaId]: data }));
-    } catch {
-      toast.error("Erro ao carregar avaliações.");
-    }
+    groupC(`📝 carregarAvaliacoes(turmaId=${turmaId})`, async () => {
+      try {
+        console.time(`[time GET] /api/avaliacoes/turma/${turmaId}`);
+        const data = await apiGet(`/api/avaliacoes/turma/${turmaId}`, { on403: "silent" });
+        console.timeEnd(`[time GET] /api/avaliacoes/turma/${turmaId}`);
+        setAvaliacoesPorTurma((prev) => ({ ...prev, [turmaId]: Array.isArray(data) ? data : [] }));
+        dbg("avaliacoes:", Array.isArray(data) ? data.length : 0);
+      } catch (err) {
+        const info = {
+          name: err?.name,
+          message: err?.message,
+          status: err?.status,
+          url: err?.url,
+          data: err?.data,
+        };
+        console.error("Erro ao carregar avaliações:", info);
+        toast.error("Erro ao carregar avaliações.");
+      }
+    });
   };
 
-  // 🔎 Filtro por status
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-
+  // 🔎 Filtro por status (comparação por yyyy-mm-dd)
+  const hoje = todayYMD();
   const turmasFiltradas = turmas.filter((t) => {
-    const inicio = new Date(t.data_inicio);
-    const fim = new Date(t.data_fim);
-    inicio.setHours(0, 0, 0, 0);
-    fim.setHours(0, 0, 0, 0);
+    const di = ymd(t.data_inicio);
+    const df = ymd(t.data_fim);
+    if (!di || !df) return filtro === "todos";
 
-    if (filtro === "programados") return inicio > hoje;
-    if (filtro === "emAndamento") return inicio <= hoje && fim >= hoje;
-    if (filtro === "realizados") return fim < hoje;
+    if (filtro === "programados") return di > hoje;
+    if (filtro === "emAndamento") return di <= hoje && df >= hoje;
+    if (filtro === "realizados") return df < hoje;
     return true; // todos
   });
 
-  // ❌ Removido: usePerfilPermitidos + <Navigate to="/login" />
-  //    Se quiser, mostre um aviso na própria tela quando o backend retornar 403.
-
   // 📄 Relatórios
   const gerarRelatorioPDF = async (turmaId) => {
-    try {
-      const data = await apiGet(`/api/relatorio-presencas/turma/${turmaId}`, { on403: "silent" });
-      const alunos = Array.isArray(data) ? data : (Array.isArray(data?.lista) ? data.lista : []);
-      const doc = new jsPDF();
-      doc.setFontSize(16);
-      doc.text("Relatório de Presença por Turma", 14, 20);
-      autoTable(doc, {
-        startY: 30,
-        head: [["Nome", "CPF", "Presença"]],
-        body: alunos.map((aluno) => [
-          aluno.nome,
-          formatarCPF(aluno.cpf),
-          aluno.presente ? "✔️ Sim" : "❌ Não",
-        ]),
-      });
-      doc.save(`relatorio_turma_${turmaId}.pdf`);
-      toast.success("✅ PDF de presença gerado!");
-    } catch {
-      toast.error("Erro ao gerar relatório em PDF.");
-    }
+    groupC(`📑 gerarRelatorioPDF(turmaId=${turmaId})`, async () => {
+      try {
+        console.time(`[time GET] /api/presencas/turma/${turmaId}/detalhes (pdf)`);
+        const data = await apiGet(`/api/presencas/turma/${turmaId}/detalhes`, { on403: "silent" });
+        console.timeEnd(`[time GET] /api/presencas/turma/${turmaId}/detalhes (pdf)`);
+
+        const datas = Array.isArray(data?.datas) ? data.datas : [];
+        const usuarios = Array.isArray(data?.usuarios) ? data.usuarios : [];
+        const totalDias = datas.length || 0;
+
+        const doc = new jsPDF();
+        doc.setFontSize(16);
+        doc.text("Relatório de Presenças por Turma (Resumo)", 14, 20);
+
+        const linhas = usuarios.map((u) => {
+          const presentes = (u.presencas || []).filter((p) => p?.presente === true).length;
+          const freq = totalDias > 0 ? Math.round((presentes / totalDias) * 100) : 0;
+          const atingiu = freq >= 75 ? "✔️" : "❌";
+          return [u.nome, formatarCPF(u.cpf), `${freq}%`, atingiu];
+        });
+
+        autoTable(doc, {
+          startY: 30,
+          head: [["Nome", "CPF", "Frequência", "≥ 75%"]],
+          body: linhas,
+        });
+
+        doc.save(`relatorio_turma_${turmaId}.pdf`);
+        toast.success("✅ PDF de presença gerado!");
+      } catch (err) {
+        const info = {
+          name: err?.name,
+          message: err?.message,
+          status: err?.status,
+          url: err?.url,
+          data: err?.data,
+        };
+        console.error("Erro ao gerar PDF de presença:", info);
+        toast.error("Erro ao gerar relatório em PDF.");
+      }
+    });
   };
 
   const gerarListaAssinaturaPDF = async (turmaId) => {
-    const turma = turmas.find((t) => t.id === turmaId);
-    let alunos = inscritosPorTurma[turmaId];
+    groupC(`🖊️ gerarListaAssinaturaPDF(turmaId=${turmaId})`, async () => {
+      const turma = turmas.find((t) => t.id === turmaId);
+      let alunos = inscritosPorTurma[turmaId];
 
-    if (!alunos) {
-      try {
-        alunos = await apiGet(`/api/inscricoes/turma/${turmaId}`, { on403: "silent" });
-      } catch {
-        toast.error("❌ Erro ao carregar inscritos.");
+      if (!alunos) {
+        try {
+          console.time(`[time GET] /api/inscricoes/turma/${turmaId} (lista assinatura)`);
+          alunos = await apiGet(`/api/inscricoes/turma/${turmaId}`, { on403: "silent" });
+          console.timeEnd(`[time GET] /api/inscricoes/turma/${turmaId} (lista assinatura)`);
+        } catch (err) {
+          const info = {
+            name: err?.name,
+            message: err?.message,
+            status: err?.status,
+            url: err?.url,
+            data: err?.data,
+          };
+          console.error("Erro ao carregar inscritos (lista assinatura):", info);
+          toast.error("❌ Erro ao carregar inscritos.");
+          return;
+        }
+      }
+
+      if (!turma || !alunos?.length) {
+        warn("Sem turma ou sem alunos para gerar lista.");
+        toast.warning("⚠️ Nenhum inscrito encontrado para esta turma.");
         return;
       }
-    }
 
-    if (!turma || !alunos?.length) {
-      toast.warning("⚠️ Nenhum inscrito encontrado para esta turma.");
-      return;
-    }
+      const di = ymd(turma.data_inicio);
+      const df = ymd(turma.data_fim);
+      const datasYMD = rangeDiasYMD(di, df);
 
-    const gerarIntervaloDeDatas = (inicio, fim) => {
-      const datas = [];
-      const d = new Date(inicio);
-      const f = new Date(fim);
-      while (d <= f) {
-        datas.push(new Date(d));
-        d.setDate(d.getDate() + 1);
-      }
-      return datas;
-    };
+      const doc = new jsPDF();
 
-    const datas = gerarIntervaloDeDatas(turma.data_inicio, turma.data_fim);
-    const doc = new jsPDF();
+      datasYMD.forEach((diaYMD, index) => {
+        if (index > 0) doc.addPage();
+        const dataFormatada = formatarDataBrasileira(diaYMD);
+        const horaInicio = turma.horario_inicio?.slice(0, 5) || "";
+        const horaFim = turma.horario_fim?.slice(0, 5) || "";
 
-    datas.forEach((data, index) => {
-      if (index > 0) doc.addPage();
-      const dataFormatada = formatarDataBrasileira(data);
-      const horaInicio = turma.horario_inicio?.slice(0, 5) || "";
-      const horaFim = turma.horario_fim?.slice(0, 5) || "";
+        doc.setFontSize(14);
+        doc.text(`Lista de Assinatura - ${turma.evento?.nome || ""} - ${turma.nome || ""}`, 14, 20);
+        doc.text(`Data: ${dataFormatada} | Horário: ${horaInicio} às ${horaFim}`, 14, 28);
 
-      doc.setFontSize(14);
-      doc.text(`Lista de Assinatura - ${turma.evento?.nome} - ${turma.nome}`, 14, 20);
-      doc.text(`Data: ${dataFormatada} | Horário: ${horaInicio} às ${horaFim}`, 14, 28);
-
-      autoTable(doc, {
-        startY: 30,
-        head: [["Nome", "CPF", "Assinatura"]],
-        body: alunos.map((a) => [a.nome, formatarCPF(a.cpf), "______________________"]),
+        autoTable(doc, {
+          startY: 30,
+          head: [["Nome", "CPF", "Assinatura"]],
+          body: alunos.map((a) => [a.nome, formatarCPF(a.cpf), "______________________"]),
+        });
       });
-    });
 
-    doc.save(`lista_assinatura_turma_${turmaId}.pdf`);
-    toast.success("📄 Lista de assinatura gerada!");
+      doc.save(`lista_assinatura_turma_${turmaId}.pdf`);
+      toast.success("📄 Lista de assinatura gerada!");
+    });
   };
 
   const gerarQrCodePresencaPDF = async (turmaId, nomeEvento = "Evento") => {
-    try {
-      const turma = turmas.find((t) => t.id === turmaId);
-      if (!turma) {
-        toast.error("Turma não encontrada.");
-        return;
-      }
-      const url = `https://escoladesaude.santos.br/presenca/${turmaId}`;
-
-      const canvasContainer = document.createElement("div");
-      const qrCodeElement = (<QRCodeCanvas value={url} size={300} />);
-      const ReactDOM = await import("react-dom");
-      ReactDOM.render(qrCodeElement, canvasContainer);
-
-      setTimeout(() => {
-        const canvas = canvasContainer.querySelector("canvas");
-        const dataUrl = canvas?.toDataURL("image/png");
-        if (!dataUrl) {
-          toast.error("Erro ao gerar imagem do QR Code.");
+    groupC(`🔳 gerarQrCodePresencaPDF(turmaId=${turmaId})`, async () => {
+      try {
+        const turma = turmas.find((t) => t.id === turmaId);
+        if (!turma) {
+          toast.error("Turma não encontrada.");
           return;
         }
+        const url = `https://escoladesaude.santos.br/presenca/${turmaId}`;
 
-        const doc = new jsPDF({ orientation: "landscape" });
-        doc.setFontSize(24);
-        doc.setFont("helvetica", "bold");
-        doc.text(nomeEvento, 148, 30, { align: "center" });
+        const canvasContainer = document.createElement("div");
+        const qrCodeElement = (<QRCodeCanvas value={url} size={300} />);
+        const ReactDOM = await import("react-dom");
+        ReactDOM.render(qrCodeElement, canvasContainer);
 
-        const nomeInstrutor = usuario?.nome || "Instrutor";
-        doc.setFontSize(16);
-        doc.setFont("helvetica", "normal");
-        doc.text(`Instrutor: ${nomeInstrutor}`, 148, 40, { align: "center" });
+        setTimeout(() => {
+          const canvas = canvasContainer.querySelector("canvas");
+          const dataUrl = canvas?.toDataURL("image/png");
+          if (!dataUrl) {
+            console.error("QR: canvas sem dataUrl");
+            toast.error("Erro ao gerar imagem do QR Code.");
+            return;
+          }
 
-        doc.addImage(dataUrl, "PNG", 98, 50, 100, 100);
-        doc.setFontSize(12);
-        doc.setTextColor(60);
-        doc.text("Escaneie este QR Code para confirmar sua presença", 148, 160, { align: "center" });
+          const doc = new jsPDF({ orientation: "landscape" });
+          doc.setFontSize(24);
+          doc.setFont("helvetica", "bold");
+          doc.text(nomeEvento, 148, 30, { align: "center" });
 
-        doc.save(`qr_presenca_turma_${turmaId}.pdf`);
-        toast.success("🔳 QR Code gerado!");
-      }, 500);
-    } catch (err) {
-      console.error("Erro ao gerar QR Code:", err);
-      toast.error("Erro ao gerar QR Code.");
-    }
+          const nomeInstrutor = usuario?.nome || "Instrutor";
+          doc.setFontSize(16);
+          doc.setFont("helvetica", "normal");
+          doc.text(`Instrutor: ${nomeInstrutor}`, 148, 40, { align: "center" });
+
+          doc.addImage(dataUrl, "PNG", 98, 50, 100, 100);
+          doc.setFontSize(12);
+          doc.setTextColor(60);
+          doc.text("Escaneie este QR Code para confirmar sua presença", 148, 160, { align: "center" });
+
+          doc.save(`qr_presenca_turma_${turmaId}.pdf`);
+          toast.success("🔳 QR Code gerado!");
+        }, 500);
+      } catch (err) {
+        const info = {
+          name: err?.name,
+          message: err?.message,
+          status: err?.status,
+          url: err?.url,
+          data: err?.data,
+        };
+        console.error("Erro ao gerar QR Code:", info);
+        toast.error("Erro ao gerar QR Code.");
+      }
+    });
   };
 
   return (

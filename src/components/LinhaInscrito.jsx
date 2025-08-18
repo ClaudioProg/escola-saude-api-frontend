@@ -1,23 +1,96 @@
+// 📁 src/components/LinhaInscrito.jsx
 import { useState } from "react";
 import { toast } from "react-toastify";
 import { motion } from "framer-motion";
 import { CheckCircle, XCircle } from "lucide-react";
 import BotaoSecundario from "./BotaoSecundario";
 import { formatarCPF as formatarCPFUtils } from "../utils/data";
+import { apiPost } from "../services/api"; // ✅ usa cliente central
 
-const hoje = new Date().toISOString().split("T")[0];
+/* ===== Helpers de data no fuso local ===== */
 
-export default function LinhaInscrito({ inscrito, turma, token }) {
-  const dataInicio = new Date(turma.data_inicio).toISOString().split("T")[0];
-  const dataFim = new Date(`${turma.data_fim}T${turma.horario_fim}`);
+function isDateOnly(str) {
+  return typeof str === "string" && /^\d{4}-\d{2}-\d{2}$/.test(str);
+}
+
+function toLocalDate(input) {
+  if (!input) return null;
+  if (input instanceof Date) return input;
+
+  if (typeof input === "string") {
+    if (isDateOnly(input)) {
+      const [y, m, d] = input.split("-").map(Number);
+      return new Date(y, m - 1, d); // 00:00 local
+    }
+    return new Date(input); // se vier com hora explícita, deixa o JS interpretar
+  }
+  return new Date(input);
+}
+
+function startOfDayLocal(d) {
+  const dt = toLocalDate(d);
+  if (!dt) return null;
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+}
+
+function endOfDayLocal(d) {
+  const dt = toLocalDate(d);
+  if (!dt) return null;
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 23, 59, 59, 999);
+}
+
+function ymdLocalString(d) {
+  // retorna "YYYY-MM-DD" em fuso local
+  const dt = startOfDayLocal(d);
+  if (!dt) return "";
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const day = String(dt.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/* Monta Date local combinando data_fim + horario_fim */
+function combineDateAndTimeLocal(dateOnly, timeHHmm) {
+  if (!dateOnly) return null;
+  const base = startOfDayLocal(dateOnly);
+  if (!base) return null;
+
+  if (timeHHmm) {
+    const [h, m] = timeHHmm.split(":").map(Number);
+    base.setHours(Number.isFinite(h) ? h : 23, Number.isFinite(m) ? m : 59, 59, 999);
+  } else {
+    base.setHours(23, 59, 59, 999);
+  }
+  return base;
+}
+
+/* ===== Componente ===== */
+
+export default function LinhaInscrito({ inscrito, turma /*, token*/ }) {
+  // hoje como string local (não usar toISOString/UTC)
+  const hojeStr = ymdLocalString(new Date());
+
+  const dataInicioStr = ymdLocalString(turma.data_inicio);
+  const dataFimDate = combineDateAndTimeLocal(turma.data_fim, turma.horario_fim);
   const agora = new Date();
-  const limiteConfirmacao = new Date(dataFim.getTime() + 48 * 60 * 60 * 1000);
 
-  const eventoAindaNaoComecou = hoje < dataInicio;
-  const eventoEncerrado = agora > dataFim;
-  const dentroPrazoConfirmacao = agora <= limiteConfirmacao;
+  // +48h após o término (em horário local)
+  const limiteConfirmacao = dataFimDate
+    ? new Date(dataFimDate.getTime() + 48 * 60 * 60 * 1000)
+    : null;
 
-  const temPresenca = inscrito.data_presenca !== null && inscrito.data_presenca !== undefined;
+  // status do evento
+  const eventoAindaNaoComecou =
+    dataInicioStr && hojeStr ? hojeStr < dataInicioStr : false;
+
+  const eventoEncerrado = dataFimDate ? agora > dataFimDate : false;
+
+  const dentroPrazoConfirmacao =
+    limiteConfirmacao ? agora <= limiteConfirmacao : false;
+
+  const temPresenca =
+    inscrito.data_presenca !== null && inscrito.data_presenca !== undefined;
+
   const [status, setStatus] = useState(temPresenca ? "presente" : null);
   const [loading, setLoading] = useState(false);
 
@@ -26,30 +99,27 @@ export default function LinhaInscrito({ inscrito, turma, token }) {
 
     setLoading(true);
     try {
-      const res = await fetch("https://escola-saude-api.onrender.com/api/presencas/registrar", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          usuario_id: inscrito.usuario_id,
-          turma_id: turma.id,
-          data: hoje,
-        }),
+      await apiPost("/api/presencas/registrar", {
+        usuario_id: inscrito.usuario_id,
+        turma_id: turma.id,
+        data: hojeStr, // data local (YYYY-MM-DD)
       });
 
-      const json = await res.json();
-      if (res.status === 201 || res.status === 409) {
+      setStatus("presente");
+      toast.success("✅ Presença confirmada!");
+    } catch (err) {
+      if (err?.status === 409) {
         setStatus("presente");
-        toast.success("✅ Presença confirmada!");
+        toast.success("✅ Presença já estava confirmada.");
       } else {
         setStatus("faltou");
-        toast.error(`❌ ${json.erro || "Erro ao confirmar presença."}`);
+        const msg =
+          err?.data?.erro ||
+          err?.data?.message ||
+          err?.message ||
+          "Erro ao confirmar presença.";
+        toast.error(`❌ ${msg}`);
       }
-    } catch (e) {
-      setStatus("faltou");
-      toast.error("❌ Erro de rede.");
     } finally {
       setLoading(false);
     }
@@ -73,7 +143,9 @@ export default function LinhaInscrito({ inscrito, turma, token }) {
     }
 
     return (
-      <span className="text-gray-500 text-sm italic dark:text-gray-300">Aguardando</span>
+      <span className="text-gray-500 text-sm italic dark:text-gray-300">
+        Aguardando
+      </span>
     );
   }
 
