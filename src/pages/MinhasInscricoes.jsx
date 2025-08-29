@@ -143,14 +143,14 @@ export default function MinhasInscricoes() {
                   item.horario_fim
                 );
 
-                // Botão Google Agenda — só se der para montar URL com segurança
+                // Botão Google Agenda — exige apenas início válido (fim é opcional)
                 let agendaHref = null;
-                if (isValidDate(dataInicioLocal) && isValidDate(dataFimLocal)) {
+                if (isValidDate(dataInicioLocal)) {
                   try {
                     agendaHref = gerarLinkGoogleAgenda({
                       titulo: item.titulo,
                       dataInicio: dataInicioLocal,
-                      dataFim: dataFimLocal,
+                      dataFim: isValidDate(dataFimLocal) ? dataFimLocal : undefined,
                       descricao: `Evento: ${item.titulo} organizado pela Escola da Saúde.`,
                       local: item.local || "Santos/SP",
                     });
