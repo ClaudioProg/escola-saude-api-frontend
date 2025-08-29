@@ -30,7 +30,7 @@ function makeLocalDate(yyyy_mm_dd, time = "00:00:00") {
   return d ? new Date(d.y, d.mo - 1, d.d, t.hh, t.mm, t.ss, 0) : new Date(NaN);
 }
 function isValidDate(d) {
-  return d instanceof Date && !Number.isNaN(d.getTime()));
+  return d instanceof Date && !Number.isNaN(d.getTime());
 }
 function safeTs(dateIso, time) {
   const d = makeLocalDate(dateIso, time);
