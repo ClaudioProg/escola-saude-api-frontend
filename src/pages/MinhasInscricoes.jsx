@@ -143,10 +143,10 @@ export default function MinhasInscricoes() {
                   item.horario_fim
                 );
 
-                // Botão Google Agenda — exige apenas início válido (fim é opcional)
-                let agendaHref = null;
-                if (isValidDate(dataInicioLocal)) {
-                  try {
+                // Tenta gerar link do Google Agenda (fim é opcional)
+                let agendaHref = "";
+                try {
+                  if (isValidDate(dataInicioLocal)) {
                     agendaHref = gerarLinkGoogleAgenda({
                       titulo: item.titulo,
                       dataInicio: dataInicioLocal,
@@ -154,10 +154,11 @@ export default function MinhasInscricoes() {
                       descricao: `Evento: ${item.titulo} organizado pela Escola da Saúde.`,
                       local: item.local || "Santos/SP",
                     });
-                  } catch (e) {
-                    console.warn("Agenda: impossível gerar link para", item?.titulo, e?.message);
                   }
+                } catch (e) {
+                  console.warn("[Agenda] Não foi possível gerar link para:", item?.titulo, e?.message);
                 }
+                const podeAgendar = Boolean(agendaHref);
 
                 // Instrutor pode ser string agregada
                 const instrutores = Array.isArray(item.instrutor)
@@ -225,18 +226,19 @@ export default function MinhasInscricoes() {
                     </p>
 
                     <div className="flex flex-wrap gap-3 mt-4">
-                      {agendaHref && (
-                        <BotaoSecundario
-                          as="a"
-                          href={agendaHref}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full sm:w-auto"
-                          aria-label="Adicionar curso à Google Agenda"
-                        >
-                          Adicionar ao Google Agenda
-                        </BotaoSecundario>
-                      )}
+                      <BotaoSecundario
+                        as="a"
+                        href={podeAgendar ? agendaHref : undefined}
+                        onClick={(e) => { if (!podeAgendar) e.preventDefault(); }}
+                        target={podeAgendar ? "_blank" : undefined}
+                        rel={podeAgendar ? "noopener noreferrer" : undefined}
+                        className={`w-full sm:w-auto ${!podeAgendar ? "pointer-events-none opacity-50" : ""}`}
+                        aria-label="Adicionar curso à Google Agenda"
+                        aria-disabled={!podeAgendar}
+                        title={podeAgendar ? "Adicionar ao Google Agenda" : "Datas insuficientes para agendar"}
+                      >
+                        Adicionar ao Google Agenda
+                      </BotaoSecundario>
 
                       <BotaoPrimario
                         className="w-full sm:w-auto"
