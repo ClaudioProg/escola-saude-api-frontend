@@ -76,7 +76,7 @@ export default function TurmasInstrutor({
     const id = Number(turma?.id);
     if (!id) return [];
 
-    // 1) Preferir datas carregadas junto com presenças (já têm horários por dia, quando houver)
+    // 1) Preferir datas carregadas junto com presenças
     const detalhado = presencasPorTurma?.[id]?.detalhado;
     const datasFromPres = Array.isArray(detalhado?.datas) ? detalhado.datas : null;
     if (datasFromPres && datasFromPres.length) {
@@ -90,7 +90,7 @@ export default function TurmasInstrutor({
         .sort((a, b) => a.data.localeCompare(b.data));
     }
 
-    // 2) Depois, usar o que já vem da API do backend (listarEventosDoinstrutor inclui turma.datas)
+    // 2) Depois, usar as que vêm na turma do backend
     const datasFromTurma = Array.isArray(turma?.datas) ? turma.datas : null;
     if (datasFromTurma && datasFromTurma.length) {
       return datasFromTurma
@@ -103,7 +103,7 @@ export default function TurmasInstrutor({
         .sort((a, b) => a.data.localeCompare(b.data));
     }
 
-    // 3) Último recurso: intervalo sequencial (evita “vazio” na UI)
+    // 3) Último recurso: intervalo sequencial
     const di = ensureYMD(turma?.data_inicio);
     const df = ensureYMD(turma?.data_fim);
     const seq = rangeDiasYMD(di, df);
@@ -166,7 +166,7 @@ export default function TurmasInstrutor({
                       Turma: {turma.nome || `Turma ${turma.id}`}
                     </p>
 
-                    {/* 📅 Chips com DATAS REAIS (nada de intervalo sequencial “cheio”) */}
+                    {/* 📅 Chips com DATAS REAIS */}
                     {datasReais.length > 0 && (
                       <div className="flex flex-wrap gap-2 mt-2">
                         {datasReais.map((d, idx) => (
@@ -237,12 +237,13 @@ export default function TurmasInstrutor({
                               ? presencasPorTurma[idSeguro]
                               : presencasPorTurma[idSeguro]?.lista ?? [];
 
+                            // ⬇️ Passando as DATAS REAIS para o filho
                             return (
                               <ListaInscritos
                                 inscritos={inscritosPorTurma[idSeguro] || []}
                                 turma={turma}
                                 presencas={listaPresencas}
-                                datas={datasReais} {/* ⬅️ datas reais para o componente filho */}
+                                datas={datasReais}
                                 token={token}
                                 carregarPresencas={() => carregarPresencas(idSeguro)}
                                 confirmarPresencaManual={confirmarPresencaManual}
