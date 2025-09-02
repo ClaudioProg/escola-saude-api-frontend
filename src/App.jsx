@@ -59,17 +59,16 @@ function LayoutComNavbar({ children }) {
     "/",
     "/login",
     "/cadastro",
-    "/validar",
-    "/validar-presenca",          // rota legada (presença)
-    "/validar-certificado",       // 👈 novos aliases (certificado)
-    "/validar-certificado.html",  // 👈 novos aliases (certificado)
+    "/validar",                 // legado (presença)
+    "/validar-presenca",        // legado do QR
+    "/validar-certificado",     // 👈 ADICIONADA
+    "/validar-certificado.html",// 👈 ADICIONADA (alias)
     "/recuperar-senha",
   ];
 
   const esconderNavbar =
     rotasPublicas.includes(location.pathname) ||
     location.pathname.startsWith("/redefinir-senha") ||
-    // ✅ esconder navbar também nas rotas do QR de presença
     location.pathname.startsWith("/presenca");
 
   return (
@@ -80,16 +79,27 @@ function LayoutComNavbar({ children }) {
   );
 }
 
-// Mantém a rota /validar para certificados (nova página React)
+// Mantém a rota /validar para a validação antiga (presença)
 function ValidarWrapper() {
   return <ValidarCertificado />;
 }
 
-/**
- * ✅ Wrapper LEGADO para QR antigo de presença:
- * Lê /validar-presenca?codigo=<url-encodada>,
- * extrai turma/token e redireciona para /presenca com os parâmetros normalizados.
- */
+/** Alias para URLs antigas com extensão .html */
+function HtmlAliasRedirect() {
+  const nav = useNavigate();
+  const loc = useLocation();
+  useEffect(() => {
+    const semHtml = loc.pathname.replace(/\.html$/, "");
+    nav(`${semHtml}${loc.search}`, { replace: true });
+  }, [loc.pathname, loc.search, nav]);
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      Redirecionando…
+    </div>
+  );
+}
+
+/** Wrapper LEGADO para QR antigo com ?codigo= */
 function ValidarPresencaRouter() {
   const [sp] = useSearchParams();
   const navigate = useNavigate();
@@ -97,12 +107,10 @@ function ValidarPresencaRouter() {
   useEffect(() => {
     const codigoRaw = sp.get("codigo") || sp.get("c") || "";
     let raw = codigoRaw;
-    try { raw = decodeURIComponent(codigoRaw); } catch { /* no-op */ }
-
+    try { raw = decodeURIComponent(codigoRaw); } catch {}
     let turmaId = null;
     let token   = null;
 
-    // 1) tenta parsear como URL válida
     try {
       const u = new URL(raw);
       turmaId =
@@ -110,7 +118,6 @@ function ValidarPresencaRouter() {
         u.searchParams.get("turma_id") ||
         u.searchParams.get("id");
       token = u.searchParams.get("t") || u.searchParams.get("token");
-
       if (!turmaId) {
         const m = (u.pathname || "").match(/\/presenca\/(\d+)/);
         if (m && m[1]) turmaId = m[1];
@@ -121,7 +128,6 @@ function ValidarPresencaRouter() {
         if (m2 && m2[1]) turmaId = m2[1];
       }
     } catch {
-      // 2) fallback: string solta
       const dec = (() => { try { return decodeURIComponent(raw); } catch { return raw; }})();
       const m = dec.match(/\/presenca\/(\d+)/);
       if (m && m[1]) turmaId = m[1];
@@ -146,41 +152,26 @@ function ValidarPresencaRouter() {
   );
 }
 
-function HtmlAliasRedirect() {
-  const nav = useNavigate();
-  const loc = useLocation();
-  useEffect(() => {
-    const semHtml = loc.pathname.replace(/\.html$/, "");
-    nav(`${semHtml}${loc.search}`, { replace: true });
-  }, [loc.pathname, loc.search, nav]);
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      Redirecionando…
-    </div>
-  );
-}
-
 export default function App() {
   return (
     <BrowserRouter>
       <LayoutComNavbar>
         <Suspense fallback={<div className="p-4 text-center">Carregando...</div>}>
           <Routes>
-            {/* 🌐 Rotas públicas */}
+            {/* 🌐 públicas */}
             <Route path="/" element={<Login />} />
             <Route path="/login" element={<Login />} />
             <Route path="/cadastro" element={<Cadastro />} />
 
-            {/* Certificado (novo componente React) */}
-            <Route path="/validar" element={<ValidarWrapper />} />
-            {/* 👇 aliases para QR antigo do certificado */}
+            {/* Certificado (nova) */}
+            <Route path="/validar-certificado" element={<ValidarCertificado />} />
             <Route path="/validar-certificado.html" element={<HtmlAliasRedirect />} />
-            <Route path="/validar-certificado.html" element={<ValidarCertificado />} />
 
-            {/* ✅ Presença (legado -> normaliza para /presenca) */}
+            {/* Presença (legado) */}
+            <Route path="/validar" element={<ValidarWrapper />} />
             <Route path="/validar-presenca" element={<ValidarPresencaRouter />} />
 
-            {/* ✅ Presença (rotas novas do QR) */}
+            {/* QR presença (novo) */}
             <Route path="/presenca" element={<ConfirmarPresenca />} />
             <Route path="/presenca/:turmaId" element={<ConfirmarPresenca />} />
 
@@ -189,7 +180,7 @@ export default function App() {
             <Route path="/redefinir-senha/:token" element={<RedefinirSenha />} />
             <Route path="/scanner" element={<Scanner />} />
 
-            {/* 🔐 Rotas protegidas (usuário) */}
+            {/* 🔐 protegidas */}
             <Route path="/dashboard" element={<PrivateRoute><DashboardUsuario /></PrivateRoute>} />
             <Route path="/eventos" element={<PrivateRoute><Eventos /></PrivateRoute>} />
             <Route path="/certificados" element={<PrivateRoute><MeusCertificados /></PrivateRoute>} />
@@ -200,137 +191,23 @@ export default function App() {
             <Route path="/avaliacao" element={<PrivateRoute><Avaliacao /></PrivateRoute>} />
             <Route path="/avaliar/:turmaId" element={<PrivateRoute><Avaliacao /></PrivateRoute>} />
 
-            {/* 🧑‍🏫 Instrutor / Admin */}
-            <Route
-              path="/instrutor"
-              element={
-                <PrivateRoute permitido={["instrutor", "administrador"]}>
-                  <DashboardInstrutor />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/agenda-instrutor"
-              element={
-                <PrivateRoute permitido={["instrutor", "administrador"]}>
-                  <AgendaInstrutor />
-                </PrivateRoute>
-              }
-            />
-
-            {/* 🛠️ Administrador */}
-            <Route
-              path="/administrador"
-              element={
-                <PrivateRoute permitido={["administrador"]}>
-                  <DashboardAdministrador />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/dashboard-analitico"
-              element={
-                <PrivateRoute permitido={["administrador"]}>
-                  <DashboardAnalitico />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/gerenciar-eventos"
-              element={
-                <PrivateRoute permitido={["administrador"]}>
-                  <GerenciarEventos />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/gestao-instrutor"
-              element={
-                <PrivateRoute permitido={["administrador"]}>
-                  <GestaoInstrutor />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/gestao-usuarios"
-              element={
-                <PrivateRoute permitido={["administrador"]}>
-                  <GestaoUsuarios />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/historico-certificados"
-              element={
-                <PrivateRoute permitido={["administrador"]}>
-                  <HistoricoCertificados />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/lista-presencas-turma"
-              element={
-                <PrivateRoute permitido={["administrador"]}>
-                  <ListaPresencasTurma />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/relatorios-customizados"
-              element={
-                <PrivateRoute permitido={["administrador"]}>
-                  <RelatoriosCustomizados />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/qr-site"
-              element={
-                <PrivateRoute permitido={["instrutor", "administrador"]}>
-                  <QrDoSite />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/turmas/presencas/:turmaId"
-              element={
-                <PrivateRoute permitido={["instrutor", "administrador"]}>
-                  <PresencasPorTurma />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/agenda-administrador"
-              element={
-                <PrivateRoute permitido={["administrador"]}>
-                  <AgendaAdministrador />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/certificados-avulsos"
-              element={
-                <PrivateRoute permitido={["administrador"]}>
-                  <CertificadosAvulsos />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/gestao-presenca"
-              element={
-                <PrivateRoute permitido={["administrador"]}>
-                  <GestaoPresencas />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/admin/qr-codes"
-              element={
-                <PrivateRoute permitido={["administrador"]}>
-                  <QRCodesEventosAdmin />
-                </PrivateRoute>
-              }
-            />
+            {/* 🧑‍🏫 / 🛠️ */}
+            <Route path="/instrutor" element={<PrivateRoute permitido={["instrutor", "administrador"]}><DashboardInstrutor /></PrivateRoute>} />
+            <Route path="/agenda-instrutor" element={<PrivateRoute permitido={["instrutor", "administrador"]}><AgendaInstrutor /></PrivateRoute>} />
+            <Route path="/administrador" element={<PrivateRoute permitido={["administrador"]}><DashboardAdministrador /></PrivateRoute>} />
+            <Route path="/dashboard-analitico" element={<PrivateRoute permitido={["administrador"]}><DashboardAnalitico /></PrivateRoute>} />
+            <Route path="/gerenciar-eventos" element={<PrivateRoute permitido={["administrador"]}><GerenciarEventos /></PrivateRoute>} />
+            <Route path="/gestao-instrutor" element={<PrivateRoute permitido={["administrador"]}><GestaoInstrutor /></PrivateRoute>} />
+            <Route path="/gestao-usuarios" element={<PrivateRoute permitido={["administrador"]}><GestaoUsuarios /></PrivateRoute>} />
+            <Route path="/historico-certificados" element={<PrivateRoute permitido={["administrador"]}><HistoricoCertificados /></PrivateRoute>} />
+            <Route path="/lista-presencas-turma" element={<PrivateRoute permitido={["administrador"]}><ListaPresencasTurma /></PrivateRoute>} />
+            <Route path="/relatorios-customizados" element={<PrivateRoute permitido={["administrador"]}><RelatoriosCustomizados /></PrivateRoute>} />
+            <Route path="/qr-site" element={<PrivateRoute permitido={["instrutor", "administrador"]}><QrDoSite /></PrivateRoute>} />
+            <Route path="/turmas/presencas/:turmaId" element={<PrivateRoute permitido={["instrutor", "administrador"]}><PresencasPorTurma /></PrivateRoute>} />
+            <Route path="/agenda-administrador" element={<PrivateRoute permitido={["administrador"]}><AgendaAdministrador /></PrivateRoute>} />
+            <Route path="/certificados-avulsos" element={<PrivateRoute permitido={["administrador"]}><CertificadosAvulsos /></PrivateRoute>} />
+            <Route path="/gestao-presenca" element={<PrivateRoute permitido={["administrador"]}><GestaoPresencas /></PrivateRoute>} />
+            <Route path="/admin/qr-codes" element={<PrivateRoute permitido={["administrador"]}><QRCodesEventosAdmin /></PrivateRoute>} />
           </Routes>
         </Suspense>
       </LayoutComNavbar>
