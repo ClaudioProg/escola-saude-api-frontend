@@ -60,14 +60,16 @@ function LayoutComNavbar({ children }) {
     "/login",
     "/cadastro",
     "/validar",
-    "/validar-presenca",   // 👈 incluir aqui para esconder a navbar nessa rota legada
+    "/validar-presenca",          // rota legada (presença)
+    "/validar-certificado",       // 👈 novos aliases (certificado)
+    "/validar-certificado.html",  // 👈 novos aliases (certificado)
     "/recuperar-senha",
   ];
 
   const esconderNavbar =
     rotasPublicas.includes(location.pathname) ||
     location.pathname.startsWith("/redefinir-senha") ||
-    // ✅ esconder navbar também nas rotas do QR
+    // ✅ esconder navbar também nas rotas do QR de presença
     location.pathname.startsWith("/presenca");
 
   return (
@@ -78,13 +80,13 @@ function LayoutComNavbar({ children }) {
   );
 }
 
-// Mantém a rota /validar para certificados
+// Mantém a rota /validar para certificados (nova página React)
 function ValidarWrapper() {
   return <ValidarCertificado />;
 }
 
 /**
- * ✅ Wrapper LEGADO para QR antigo:
+ * ✅ Wrapper LEGADO para QR antigo de presença:
  * Lê /validar-presenca?codigo=<url-encodada>,
  * extrai turma/token e redireciona para /presenca com os parâmetros normalizados.
  */
@@ -103,32 +105,26 @@ function ValidarPresencaRouter() {
     // 1) tenta parsear como URL válida
     try {
       const u = new URL(raw);
-      // query ?turma= / ?turma_id= / ?id=
       turmaId =
         u.searchParams.get("turma") ||
         u.searchParams.get("turma_id") ||
         u.searchParams.get("id");
       token = u.searchParams.get("t") || u.searchParams.get("token");
 
-      // /presenca/:id no path
       if (!turmaId) {
         const m = (u.pathname || "").match(/\/presenca\/(\d+)/);
         if (m && m[1]) turmaId = m[1];
       }
-
-      // path encodado tipo /%2Fpresenca%2F13
       if (!turmaId) {
         const decPath = decodeURIComponent(u.pathname || "");
         const m2 = decPath.match(/\/presenca\/(\d+)/);
         if (m2 && m2[1]) turmaId = m2[1];
       }
     } catch {
-      // 2) fallback: tratar como string qualquer
+      // 2) fallback: string solta
       const dec = (() => { try { return decodeURIComponent(raw); } catch { return raw; }})();
       const m = dec.match(/\/presenca\/(\d+)/);
       if (m && m[1]) turmaId = m[1];
-
-      // extrai query manualmente
       const qs = dec.includes("?") ? dec.split("?")[1] : "";
       const qsp = new URLSearchParams(qs);
       token = qsp.get("t") || qsp.get("token") || token;
@@ -143,10 +139,23 @@ function ValidarPresencaRouter() {
     navigate(dest, { replace: true });
   }, [sp, navigate]);
 
-  // Pequeno loading para não parecer "vazio"
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-zinc-900">
       <div className="text-sm text-gray-600 dark:text-gray-200">Redirecionando…</div>
+    </div>
+  );
+}
+
+function HtmlAliasRedirect() {
+  const nav = useNavigate();
+  const loc = useLocation();
+  useEffect(() => {
+    const semHtml = loc.pathname.replace(/\.html$/, "");
+    nav(`${semHtml}${loc.search}`, { replace: true });
+  }, [loc.pathname, loc.search, nav]);
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      Redirecionando…
     </div>
   );
 }
@@ -161,12 +170,17 @@ export default function App() {
             <Route path="/" element={<Login />} />
             <Route path="/login" element={<Login />} />
             <Route path="/cadastro" element={<Cadastro />} />
-            <Route path="/validar" element={<ValidarWrapper />} />
 
-            {/* ✅ Rota LEGADA que chega pelo QR antigo */}
+            {/* Certificado (novo componente React) */}
+            <Route path="/validar" element={<ValidarWrapper />} />
+            {/* 👇 aliases para QR antigo do certificado */}
+            <Route path="/validar-certificado.html" element={<HtmlAliasRedirect />} />
+            <Route path="/validar-certificado.html" element={<ValidarCertificado />} />
+
+            {/* ✅ Presença (legado -> normaliza para /presenca) */}
             <Route path="/validar-presenca" element={<ValidarPresencaRouter />} />
 
-            {/* ✅ Rotas novas do QR de presença */}
+            {/* ✅ Presença (rotas novas do QR) */}
             <Route path="/presenca" element={<ConfirmarPresenca />} />
             <Route path="/presenca/:turmaId" element={<ConfirmarPresenca />} />
 
