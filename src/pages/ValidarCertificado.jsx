@@ -68,7 +68,7 @@ export default function ValidarCertificado() {
           (typeof data?.status === "string" && data.status.toLowerCase() === "ok");
 
         if (presente) {
-          setMensagem("✅ Presença confirmada! Você pode emitir seu certificado.");
+          setMensagem("✅ Certificado validado com sucesso! Você pode imprimir esta certificação.");
           setStatus("sucesso");
         } else {
           setMensagem("❌ Presença ainda não registrada para este evento.");
@@ -119,11 +119,11 @@ export default function ValidarCertificado() {
             className="h-24 mb-4 drop-shadow print:hidden"
             onError={(e) => (e.currentTarget.style.display = "none")}
           />
-          <h1 className="text-3xl font-bold text-blue-700 dark:text-white print:text-black">
+          <h1 className="text-3xl font-bold text-[#0f4c5c] dark:text-white print:text-black">
             Escola da Saúde - Santos
           </h1>
           <p className="text-gray-600 dark:text-gray-300 print:text-black">
-            Validação de Presença em Evento
+            Validação de Certificado
           </p>
         </div>
 
