@@ -25,6 +25,7 @@ const RedefinirSenha        = lazy(() => import("./pages/RedefinirSenha"));
 const Scanner               = lazy(() => import("./pages/Scanner"));
 
 const Eventos               = lazy(() => import("./pages/Eventos"));
+const MinhasPresencas       = lazy(() => import("./pages/MinhasPresencas"));
 const MeusCertificados      = lazy(() => import("./pages/MeusCertificados"));
 const MinhasInscricoes      = lazy(() => import("./pages/MinhasInscricoes"));
 const DashboardUsuario      = lazy(() => import("./pages/DashboardUsuario"));
@@ -183,6 +184,7 @@ export default function App() {
             {/* 🔐 protegidas */}
             <Route path="/dashboard" element={<PrivateRoute><DashboardUsuario /></PrivateRoute>} />
             <Route path="/eventos" element={<PrivateRoute><Eventos /></PrivateRoute>} />
+            <Route path="/minhas-presencas" element={<PrivateRoute><MinhasPresencas /></PrivateRoute>} />
             <Route path="/certificados" element={<PrivateRoute><MeusCertificados /></PrivateRoute>} />
             <Route path="/minhas-inscricoes" element={<PrivateRoute><MinhasInscricoes /></PrivateRoute>} />
             <Route path="/perfil" element={<PrivateRoute><Perfil /></PrivateRoute>} />
