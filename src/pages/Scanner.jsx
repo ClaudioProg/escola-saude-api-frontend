@@ -1,24 +1,28 @@
-//frontend/src/pages/scanner.jsx
+// 📁 frontend/src/pages/Scanner.jsx
 import { useEffect, useState, useRef } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { motion } from "framer-motion";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, QrCode } from "lucide-react"; // ⬅️ ícone para PageHeader
 import CarregandoSkeleton from "../components/CarregandoSkeleton";
 import ErroCarregamento from "../components/ErroCarregamento";
+
+// ⬇️ novos componentes globais
+import PageHeader from "../components/PageHeader";
+import Footer from "../components/Footer";
 
 export default function Scanner() {
   const [resultado, setResultado] = useState(null);
   const [detectado, setDetectado] = useState(false);
   const [erro, setErro] = useState(false);
   const [iniciando, setIniciando] = useState(true);
-  const [handoff, setHandoff] = useState(false); // novo: overlay de transição
+  const [handoff, setHandoff] = useState(false); // overlay de transição
 
   const navigate = useNavigate();
   const html5QrCodeRef = useRef(null);
   const timeoutRef = useRef(null);
-  const processedRef = useRef(false);   // novo: garante 1 leitura
+  const processedRef = useRef(false);   // garante 1 leitura
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -46,7 +50,7 @@ export default function Scanner() {
         const html5QrCode = new Html5Qrcode("leitor-qr");
         html5QrCodeRef.current = html5QrCode;
 
-        // preferir facingMode (mais estável) com fallback para getCameras()
+        // preferir facingMode com fallback para getCameras()
         let cameraConfig = { facingMode: "environment" };
         try {
           const devices = await Html5Qrcode.getCameras();
@@ -68,13 +72,11 @@ export default function Scanner() {
           // mostra overlay e encerra câmera antes de navegar
           setHandoff(true);
 
-          // parar/limpar com race de segurança
           const stop = (async () => { try { await html5QrCode.stop(); } catch {} })();
           await Promise.race([stop, new Promise(r => setTimeout(r, 600))]);
           try { await html5QrCode.clear(); } catch {}
           html5QrCodeRef.current = null;
 
-          // dar 1 tick pro DOM assentar antes do navigate
           setTimeout(() => {
             if (!mountedRef.current) return;
             navigate(`/validar-presenca?codigo=${encodeURIComponent(decodedText)}`, { replace: true });
@@ -127,65 +129,91 @@ export default function Scanner() {
   }, [iniciando, navigate]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.5 }}
-      className="min-h-screen bg-gelo dark:bg-neutral-900 text-center py-8 px-4"
-    >
-      <h1 className="text-2xl font-bold mb-4 text-lousa dark:text-white">Escanear QR Code</h1>
-      <p className="text-gray-600 dark:text-gray-300 mb-4 max-w-md mx-auto">
-        Aponte a câmera para o QR Code fixado na sala. A leitura será automática e sua presença será registrada.
-      </p>
+    <div className="flex flex-col min-h-screen bg-gelo dark:bg-neutral-900">
+      {/* 🟧 Faixa compacta e centralizada (mantendo família “presenças/QR” em laranja) */}
+      <PageHeader title="Escanear QR Code" icon={QrCode} variant="laranja" />
 
-      {erro ? (
-        <ErroCarregamento mensagem="Erro ao iniciar o leitor de QR Code." />
-      ) : iniciando ? (
-        <CarregandoSkeleton height="300px" />
-      ) : (
-        <div
-          id="leitor-qr"
-          className={`relative mx-auto w-full max-w-sm aspect-square border-4 ${
-            detectado ? "border-green-500" : "border-lousa"
-          } rounded-xl transition-all duration-300 overflow-hidden bg-black/5`}
-          role="region"
-          aria-label="Leitor de QR Code"
+      <main role="main" className="flex-1">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.5 }}
+          className="text-center py-8 px-4"
         >
-          <div className="absolute top-2 right-2 animate-pulse">
-            <QrCodeIcon />
-          </div>
+          <p
+            className="text-gray-700 dark:text-gray-300 mb-4 max-w-md mx-auto"
+            aria-live="polite"
+          >
+            Aponte a câmera para o QR Code fixado na sala. A leitura será automática e sua presença será registrada.
+          </p>
 
-          {detectado && (
-            <div className="absolute bottom-2 right-2 text-green-500" aria-hidden="true">
-              <CheckCircle size={32} />
+          {erro ? (
+            <ErroCarregamento mensagem="Erro ao iniciar o leitor de QR Code." />
+          ) : iniciando ? (
+            <CarregandoSkeleton height="300px" />
+          ) : (
+            <div
+              id="leitor-qr"
+              className={`relative mx-auto w-full max-w-sm aspect-square border-4 ${
+                detectado ? "border-green-500" : "border-lousa"
+              } rounded-xl transition-all duration-300 overflow-hidden bg-black/5`}
+              role="region"
+              aria-label="Leitor de QR Code"
+            >
+              <div className="absolute top-2 right-2 animate-pulse" aria-hidden="true">
+                <QrCodeIcon />
+              </div>
+
+              {detectado && (
+                <div className="absolute bottom-2 right-2 text-green-500" aria-hidden="true">
+                  <CheckCircle size={32} />
+                </div>
+              )}
+
+              {/* overlay de handoff para evitar tela branca */}
+              {handoff && (
+                <div
+                  className="absolute inset-0 bg-white/90 dark:bg-neutral-900/90 flex flex-col items-center justify-center gap-2"
+                  role="status"
+                  aria-live="assertive"
+                >
+                  <div className="animate-spin h-8 w-8 rounded-full border-2 border-lousa border-t-transparent" />
+                  <p className="text-lousa dark:text-white font-medium">Registrando presença…</p>
+                </div>
+              )}
             </div>
           )}
 
-          {/* overlay de handoff para evitar tela branca */}
-          {handoff && (
-            <div className="absolute inset-0 bg-white/90 dark:bg-neutral-900/90 flex flex-col items-center justify-center gap-2">
-              <div className="animate-spin h-8 w-8 rounded-full border-2 border-lousa border-t-transparent" />
-              <p className="text-lousa dark:text-white font-medium">Registrando presença…</p>
-            </div>
+          {resultado && !handoff && (
+            <p className="mt-4 text-green-600 dark:text-green-400 font-medium break-words">
+              Resultado: {resultado}
+            </p>
           )}
-        </div>
-      )}
+        </motion.div>
+      </main>
 
-      {resultado && !handoff && (
-        <p className="mt-4 text-green-600 dark:text-green-400 font-medium break-words">
-          Resultado: {resultado}
-        </p>
-      )}
-    </motion.div>
+      {/* Rodapé institucional */}
+      <Footer />
+    </div>
   );
 }
 
 function QrCodeIcon() {
   return (
-    <svg className="w-6 h-6 text-lousa dark:text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M4 4h5v5H4V4zm11 0h5v5h-5V4zM4 15h5v5H4v-5zm11 0h5v5h-5v-5z" />
+    <svg
+      className="w-6 h-6 text-lousa dark:text-white"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M4 4h5v5H4V4zm11 0h5v5h-5V4zM4 15h5v5H4v-5zm11 0h5v5h-5v-5z"
+      />
     </svg>
   );
 }
