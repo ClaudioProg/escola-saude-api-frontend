@@ -21,14 +21,34 @@ function maskClientId(id) {
   return `${p.slice(0, 10)}… (${p.length} chars)`;
 }
 
-// ♿ Necessário para acessibilidade do react-modal
-Modal.setAppElement("#root");
+/* ──────────────────────────────────────────────────────────────
+   A11y: setAppElement seguro
+   ────────────────────────────────────────────────────────────── */
+(function ensureModalAppElement() {
+  try {
+    const el = document.getElementById("root");
+    if (el) {
+      Modal.setAppElement(el);
+    } else {
+      // Tenta de novo no próximo frame (SSR/hydration edge)
+      requestAnimationFrame(() => {
+        const later = document.getElementById("root");
+        if (later) Modal.setAppElement(later);
+      });
+    }
+  } catch (e) {
+    // Não quebra a app caso falhe; apenas avisa em dev
+    if (IS_DEV) console.warn("[react-modal] setAppElement falhou:", e);
+  }
+})();
 
-// 🔎 Logs estratégicos (apenas em dev)
+/* ──────────────────────────────────────────────────────────────
+   Logs estratégicos (apenas em dev)
+   ────────────────────────────────────────────────────────────── */
 if (IS_DEV) {
   console.groupCollapsed(
     "%c[GSI:init]",
-    "color:#0ea5e9;font-weight:700",
+    "color:#14532d;font-weight:700", // green-900
     "Diagnóstico do Google Sign-In"
   );
   console.log("• window.location.origin:", window.location.origin);
@@ -36,15 +56,14 @@ if (IS_DEV) {
   console.log("• VITE_GOOGLE_CLIENT_ID:", maskClientId(clientId));
   console.groupEnd();
 
-  // Expor o GID globalmente para inspeção no DevTools:
-  // No console, digite: window.__GID
+  // Expor o GID globalmente para inspeção no DevTools (apenas dev)
   try {
     window.__GID = clientId;
   } catch (e) {
     console.warn("Não foi possível expor window.__GID:", e);
   }
 
-  // Escuta erros globais que venham do domínio do Google
+  // Escuta erros globais vindos do domínio do Google (debug)
   window.addEventListener("error", (ev) => {
     const src = ev?.filename || "";
     if (/accounts\.google\.com|gstatic\.com/i.test(src)) {
@@ -61,61 +80,137 @@ if (IS_DEV) {
 }
 
 if (!clientId) {
-  console.warn(
-    "⚠️  VITE_GOOGLE_CLIENT_ID ausente! Verifique seu .env.local e reinicie o Vite."
+  console.warn("⚠️  VITE_GOOGLE_CLIENT_ID ausente! Verifique seu .env.local e reinicie o Vite.");
+}
+
+/* ──────────────────────────────────────────────────────────────
+   ErrorBoundary simples com fallback acessível
+   ────────────────────────────────────────────────────────────── */
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, info: null };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    if (IS_DEV) {
+      console.error("[App ErrorBoundary]", error, info);
+    }
+    this.setState({ info });
+  }
+  handleReload = () => {
+    window.location.reload();
+  };
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen grid place-items-center p-6 bg-white text-gray-900 dark:bg-gray-900 dark:text-white">
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-zinc-700 shadow p-6 text-center"
+          >
+            <h1 className="text-xl font-bold mb-2">Ocorreu um erro inesperado</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+              Tente recarregar a página. Se o problema persistir, avise o suporte.
+            </p>
+            <button
+              onClick={this.handleReload}
+              className="inline-flex items-center justify-center rounded-xl px-4 py-2 font-semibold bg-green-900 text-white hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-900/60"
+            >
+              Recarregar
+            </button>
+            {IS_DEV && this.state.info ? (
+              <pre className="text-left text-xs mt-4 overflow-auto max-h-48 opacity-80">
+{JSON.stringify(this.state.info, null, 2)}
+              </pre>
+            ) : null}
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Botão de fechar acessível para os toasts
+   ────────────────────────────────────────────────────────────── */
+function CloseBtn({ closeToast }) {
+  return (
+    <button
+      type="button"
+      onClick={closeToast}
+      aria-label="Fechar notificação"
+      className="inline-flex items-center justify-center h-6 w-6 rounded-full focus:outline-none focus:ring-2 focus:ring-green-900/60"
+      title="Fechar"
+    >
+      ✕
+    </button>
   );
 }
 
-// ✅ Render
-ReactDOM.createRoot(document.getElementById("root")).render(
+/* ──────────────────────────────────────────────────────────────
+   Render
+   ────────────────────────────────────────────────────────────── */
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(
   <React.StrictMode>
-    {clientId ? (
-      <GoogleOAuthProvider
-        clientId={clientId}
-        // Dispara quando a lib do Google termina de carregar
-        onScriptLoadSuccess={() => {
-          if (IS_DEV) {
-            console.info(
-              "%c[GSI] onScriptLoadSuccess",
-              "color:#16a34a",
-              "SDK do Google carregada com sucesso."
+    <ErrorBoundary>
+      {clientId ? (
+        <GoogleOAuthProvider
+          clientId={clientId}
+          onScriptLoadSuccess={() => {
+            if (IS_DEV) {
+              console.info(
+                "%c[GSI] onScriptLoadSuccess",
+                "color:#16a34a", // green-600
+                "SDK do Google carregada com sucesso."
+              );
+            }
+          }}
+          onScriptLoadError={() => {
+            console.error(
+              "[GSI] onScriptLoadError → Falha ao carregar a SDK do Google. Verifique CORS, bloqueadores e rede."
             );
-          }
-        }}
-        // Dispara se houver problema para baixar a lib do Google
-        onScriptLoadError={() => {
-          console.error(
-            "[GSI] onScriptLoadError → Falha ao carregar a SDK do Google. Verifique CORS, bloqueadores e rede."
-          );
-        }}
-      >
-        <App />
-        <ToastContainer
-          position="top-right"
-          autoClose={4000}
-          hideProgressBar={false}
-          newestOnTop
-          closeOnClick
-          pauseOnHover
-          draggable
-          theme="colored"
-        />
-      </GoogleOAuthProvider>
-    ) : (
-      <>
-        {/* Renderiza o app mesmo sem o Provider, para não quebrar a UI */}
-        <App />
-        <ToastContainer
-          position="top-right"
-          autoClose={4000}
-          hideProgressBar={false}
-          newestOnTop
-          closeOnClick
-          pauseOnHover
-          draggable
-          theme="colored"
-        />
-      </>
-    )}
+          }}
+        >
+          <App />
+          <ToastContainer
+            position="top-right"
+            autoClose={4000}
+            hideProgressBar={false}
+            newestOnTop
+            closeOnClick
+            pauseOnHover
+            draggable
+            theme="colored"
+            closeButton={<CloseBtn />}
+            toastClassName={() => "rounded-xl shadow ring-1 ring-black/5 text-sm"}
+            bodyClassName={() => "leading-relaxed"}
+          />
+        </GoogleOAuthProvider>
+      ) : (
+        <>
+          {/* Renderiza o app mesmo sem o Provider, para não quebrar a UI */}
+          <App />
+          <ToastContainer
+            position="top-right"
+            autoClose={4000}
+            hideProgressBar={false}
+            newestOnTop
+            closeOnClick
+            pauseOnHover
+            draggable
+            theme="colored"
+            closeButton={<CloseBtn />}
+            toastClassName={() => "rounded-xl shadow ring-1 ring-black/5 text-sm"}
+            bodyClassName={() => "leading-relaxed"}
+          />
+        </>
+      )}
+    </ErrorBoundary>
   </React.StrictMode>
 );

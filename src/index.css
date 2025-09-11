@@ -4,99 +4,181 @@
 @tailwind utilities;
 
 /* ==========================================
-   Estilização do Leitor de QR Code (html5-qrcode)
-   ========================================== */
+   Tokens rápidos via CSS vars (opcional)
+========================================== */
+@layer base {
+  :root {
+    --brand-900: #14532d; /* green-900 */
+    --brand-800: #166534;
+    --ring: 0 0 0 2px rgba(20,83,45,.6);
+    --muted: #6b7280;
+  }
+  .dark {
+    --ring: 0 0 0 2px rgba(20,83,45,.75);
+  }
+
+  /* Foco visível global */
+  :focus-visible {
+    outline: 2px solid transparent;
+    box-shadow: var(--ring);
+    border-radius: .625rem;
+  }
+
+  /* Alto contraste do SO */
+  @media (forced-colors: active) {
+    :focus-visible { outline: 2px solid Highlight; box-shadow: none; }
+  }
+}
+
+/* ==========================================
+   Leitor de QR Code (html5-qrcode)
+   - Removemos o “shaded” branco.
+   - Outline verde 900, com fallback no dark.
+========================================== */
 #leitor-qr #qr-shaded-region > div[style*="background-color: rgb(255, 255, 255)"],
 #leitor-qr #qr-shaded-region *[style*="background-color: rgb(255, 255, 255)"] {
   display: none !important;
 }
-
 #leitor-qr #qr-shaded-region {
   background: transparent !important;
   border: none !important;
 }
-
-#leitor-qr,
-#leitor-qr * {
+#leitor-qr, #leitor-qr * {
   background-color: transparent !important;
 }
 
 #leitor-qr canvas {
-  /* verde aproximado do Tailwind (emerald-400) */
-  outline: 2px dashed #4ade80 !important;
+  /* outline verde 900; em dark, reforça contraste */
+  outline: 2px dashed var(--brand-900) !important;
   outline-offset: -8px;
+}
+.dark #leitor-qr canvas {
+  outline: 2px dashed #22c55e !important; /* green-500 para contraste no dark */
+}
+
+/* Respeita redução de movimento */
+@media (prefers-reduced-motion: reduce) {
+  #leitor-qr canvas { transition: none !important; }
 }
 
 /* ==========================================
    Campos com ícones à esquerda
-   ========================================== */
-.campo-com-icone {
-  @apply relative w-full;
-}
+   (migrados para @layer components para
+   aproveitar purge e variáveis)
+========================================== */
+@layer components {
+  .campo-com-icone { @apply relative w-full; }
+  .campo-com-icone .icone-esquerda {
+    @apply absolute left-3 top-2.5 text-gray-400 pointer-events-none;
+  }
 
-.campo-com-icone .icone-esquerda {
-  @apply absolute left-3 top-2.5 text-gray-400 pointer-events-none;
-}
+  .campo {
+    @apply w-full pl-10 pr-3 py-2 rounded-md border border-gray-300
+           bg-white text-gray-900 placeholder:text-gray-400
+           focus:outline-none focus:ring-2 focus:ring-green-900/60 focus:border-green-900
+           dark:bg-zinc-900 dark:text-white dark:border-zinc-700;
+  }
 
-.campo {
-  @apply w-full pl-10 pr-3 py-2 rounded-md border border-gray-300 
-    focus:outline-none focus:ring-2 focus:ring-emerald-500;
-}
+  textarea.campo { @apply resize-y min-h-[100px]; }
 
-textarea.campo {
-  @apply resize-y min-h-[100px];
-}
-
-select.campo,
-input[type="number"].campo {
-  @apply appearance-none;
+  select.campo,
+  input[type="number"].campo { @apply appearance-none; }
 }
 
 /* ==========================================
    Estilos de Modais (react-modal)
-   ========================================== */
-.overlay,
-.overlayTurma {
-  @apply fixed inset-0 bg-black bg-opacity-60 z-[1000];
-}
+   - z-index revisados, acessível e responsivo
+========================================== */
+@layer components {
+  .overlay {
+    @apply fixed inset-0 bg-black/60 z-[1000] backdrop-blur-[1px];
+  }
+  .overlayTurma { @apply overlay z-[2000]; }
 
-.modal,
-.modalTurma {
-  @apply fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 
-    bg-white p-8 rounded-xl shadow-xl max-w-[600px] w-[90%] z-[1001];
-}
+  .modal {
+    @apply fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+           bg-white p-6 md:p-8 rounded-xl shadow-xl max-w-[600px] w-[92%] z-[1001]
+           dark:bg-zinc-900;
+  }
+  .modalTurma { @apply modal max-w-[500px] z-[2001]; }
 
-/* ModalTurma com z-index mais alto */
-.modalTurma {
-  @apply max-w-[500px] z-[2001];
-}
-.overlayTurma {
-  @apply z-[2000];
+  /* Foco inicial visível dentro do modal */
+  .modal :focus-visible { box-shadow: var(--ring); }
 }
 
 /* ==========================================
    Agenda (React Calendar) — layout fluido
-   ========================================== */
-/* --- React Calendar: tornar largo e responsivo --- */
+========================================== */
 .react-calendar-custom {
-  width: 100% !important;         /* vence o 350px do CSS padrão */
+  width: 100% !important; /* vence o 350px padrão */
   max-width: none !important;
   font-size: clamp(1rem, 1.1vw, 1.05rem);
+  background: transparent;
 }
 
-/* tiles mais altos para caber as bolinhas */
-.react-calendar-custom .react-calendar__tile {
-  padding: clamp(0.7rem, 1vw, 1rem) clamp(0.4rem, 0.8vw, 0.7rem) !important;
-  border-radius: 0.5rem;
+.react-calendar-custom .react-calendar__navigation {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: .75rem;
+  gap: .5rem;
 }
-
-/* navegação um pouco maior */
 .react-calendar-custom .react-calendar__navigation button {
+  background: transparent;
+  border: none;
   padding: clamp(0.35rem, 0.7vw, 0.55rem) !important;
   font-size: clamp(1rem, 1.2vw, 1.1rem) !important;
+  border-radius: .75rem;
+  color: inherit;
+}
+.react-calendar-custom .react-calendar__navigation button:hover,
+.react-calendar-custom .react-calendar__navigation button:focus-visible {
+  background: color-mix(in oklab, var(--brand-900) 12%, transparent);
 }
 
-/* bolinhas (tamanhos proporcionais) */
+.react-calendar-custom .react-calendar__tile {
+  padding: clamp(.7rem, 1vw, 1rem) clamp(.4rem, .8vw, .7rem) !important;
+  border-radius: .5rem;
+  text-align: center;
+  transition: background-color .2s ease, color .2s ease;
+  color: inherit;
+}
+.react-calendar-custom .react-calendar__tile:enabled:hover,
+.react-calendar-custom .react-calendar__tile:enabled:focus-visible {
+  background-color: color-mix(in oklab, var(--brand-900) 10%, transparent);
+}
+
+/* selecionado */
+.react-calendar-custom .react-calendar__tile--active {
+  background-color: var(--brand-900) !important;
+  color: #fff !important;
+}
+
+/* hoje (realce sutil) */
+.react-calendar-custom .react-calendar__tile--now {
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--brand-900) 45%, transparent);
+  border-radius: .5rem;
+}
+
+/* range */
+.react-calendar-custom .react-calendar__tile--range {
+  background-color: color-mix(in oklab, var(--brand-900) 18%, transparent);
+  color: #fff;
+}
+.react-calendar-custom .react-calendar__tile--rangeStart,
+.react-calendar-custom .react-calendar__tile--rangeEnd {
+  background-color: var(--brand-900);
+  color: #fff;
+}
+
+/* estados desabilitados */
+.react-calendar-custom .react-calendar__tile:disabled {
+  color: var(--muted);
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+/* bolinhas (event dots) */
 .agenda-dot {
   display: inline-block;
   width: clamp(6px, 0.9vw, 12px);
@@ -107,4 +189,35 @@ input[type="number"].campo {
 /* reserva altura para as bolinhas mesmo sem eventos (evita pulo) */
 .react-calendar-custom .rc-day-dots {
   min-height: clamp(10px, 1vw, 14px);
+}
+
+/* Dark refinements */
+.dark .react-calendar-custom .react-calendar__tile:enabled:hover,
+.dark .react-calendar-custom .react-calendar__tile:enabled:focus-visible {
+  background-color: color-mix(in oklab, var(--brand-900) 20%, transparent);
+}
+
+/* ==========================================
+   Acessibilidade extra / Mobile tweaks
+========================================== */
+@layer utilities {
+  .tap-safe { -webkit-tap-highlight-color: transparent; }
+}
+
+@media (max-width: 480px) {
+  .modal { @apply w-[94%] p-5; }
+}
+
+/* ==========================================
+   Impressão
+========================================== */
+@media print {
+  .overlay, .overlayTurma { display: none !important; }
+  .modal, .modalTurma {
+    position: static !important;
+    transform: none !important;
+    box-shadow: none !important;
+    border: 1px solid #000;
+    page-break-inside: avoid;
+  }
 }
