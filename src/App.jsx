@@ -9,7 +9,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import PrivateRoute from "./components/PrivateRoute";
-import { Suspense, lazy, useEffect, useMemo, useRef } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import Navbar from "./components/Navbar";
 import CertificadosAvulsos from "./pages/CertificadosAvulsos";
 import QRCodesEventosAdmin from "./pages/QRCodesEventosAdmin";
@@ -55,9 +55,9 @@ const ConfirmarPresenca     = lazy(() => import("./pages/ConfirmarPresenca"));
 /* ──────────────────────────────────────────────────────────────
    A11y: Announcer de mudanças de rota
    ────────────────────────────────────────────────────────────── */
-function RouteChangeAnnouncer() {
+   function RouteChangeAnnouncer() {
   const location = useLocation();
-  const [message, setMessage] = React.useState("Carregado");
+  const [message, setMessage] = useState("Carregado");
   useEffect(() => {
     const path = location.pathname.replace(/^\/+/, "") || "início";
     setMessage(`Página carregada: ${path}`);
@@ -167,28 +167,60 @@ function ValidarPresencaRouter() {
 
     try {
       const u = new URL(raw);
+
+      // 1) tenta por querystring
       turmaId =
         u.searchParams.get("turma") ||
         u.searchParams.get("turma_id") ||
         u.searchParams.get("id");
       token = u.searchParams.get("t") || u.searchParams.get("token");
+
+      // 2) tenta extrair do pathname SEM regex
       if (!turmaId) {
-        const m = (u.pathname || "").match(/\\/presenca\\/(\\d+)/);
+        const parts = (u.pathname || "").split("/").filter(Boolean);
+        const idx = parts.indexOf("presenca");
+        if (idx >= 0 && parts[idx + 1]) turmaId = parts[idx + 1];
+      }
+
+      // 3) fallback com regex CORRETO (sem barras extras)
+      if (!turmaId) {
+        const m = (u.pathname || "").match(/\/presenca\/(\d+)/);
         if (m && m[1]) turmaId = m[1];
       }
+
+      // 4) mais uma tentativa com pathname decodificado
       if (!turmaId) {
         const decPath = decodeURIComponent(u.pathname || "");
-        const m2 = decPath.match(/\\/presenca\\/(\\d+)/);
+        const m2 = decPath.match(/\/presenca\/(\d+)/);
         if (m2 && m2[1]) turmaId = m2[1];
       }
     } catch {
-      const dec = (() => { try { return decodeURIComponent(raw); } catch { return raw; }})();
-      const m = dec.match(/\\/presenca\\/(\\d+)/);
-      if (m && m[1]) turmaId = m[1];
+      // Se 'raw' não é URL válida, tenta extrair manualmente
+      const dec = (() => { try { return decodeURIComponent(raw); } catch { return raw; } })();
+
+      // querystring direta (…?turma=123&t=xxx)
       const qs = dec.includes("?") ? dec.split("?")[1] : "";
       const qsp = new URLSearchParams(qs);
       token = qsp.get("t") || qsp.get("token") || token;
-      turmaId = qsp.get("turma") || qsp.get("turma_id") || qsp.get("id") || turmaId;
+      turmaId =
+        qsp.get("turma") ||
+        qsp.get("turma_id") ||
+        qsp.get("id") ||
+        turmaId;
+
+      // path “…/presenca/123” (sem regex → mais robusto)
+      if (!turmaId) {
+        const pathOnly = dec.split("?")[0] || "";
+        const parts = pathOnly.split("/").filter(Boolean);
+        const idx = parts.indexOf("presenca");
+        if (idx >= 0 && parts[idx + 1]) turmaId = parts[idx + 1];
+      }
+
+      // fallback final com REGEX CORRETO
+      if (!turmaId) {
+        const m = dec.match(/\/presenca\/(\d+)/);
+        if (m && m[1]) turmaId = m[1];
+      }
     }
 
     const search = new URLSearchParams();
@@ -200,7 +232,7 @@ function ValidarPresencaRouter() {
   }, [sp, navigate]);
 
   return (
-    <div className="min-h-[60vh] flex items-center justify-center bg-gray-50 dark:bg-zinc-900">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-zinc-900">
       <div className="text-sm text-gray-600 dark:text-gray-200">Redirecionando…</div>
     </div>
   );
