@@ -4,7 +4,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import Modal from "react-modal";
 import { GoogleOAuthProvider } from "@react-oauth/google";
-import { ToastContainer } from "react-toastify";
+import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./index.css";
 import "./App.css";
@@ -30,14 +30,12 @@ function maskClientId(id) {
     if (el) {
       Modal.setAppElement(el);
     } else {
-      // Tenta de novo no próximo frame (SSR/hydration edge)
       requestAnimationFrame(() => {
         const later = document.getElementById("root");
         if (later) Modal.setAppElement(later);
       });
     }
   } catch (e) {
-    // Não quebra a app caso falhe; apenas avisa em dev
     if (IS_DEV) console.warn("[react-modal] setAppElement falhou:", e);
   }
 })();
@@ -48,7 +46,7 @@ function maskClientId(id) {
 if (IS_DEV) {
   console.groupCollapsed(
     "%c[GSI:init]",
-    "color:#14532d;font-weight:700", // green-900
+    "color:#14532d;font-weight:700",
     "Diagnóstico do Google Sign-In"
   );
   console.log("• window.location.origin:", window.location.origin);
@@ -56,14 +54,12 @@ if (IS_DEV) {
   console.log("• VITE_GOOGLE_CLIENT_ID:", maskClientId(clientId));
   console.groupEnd();
 
-  // Expor o GID globalmente para inspeção no DevTools (apenas dev)
   try {
     window.__GID = clientId;
   } catch (e) {
     console.warn("Não foi possível expor window.__GID:", e);
   }
 
-  // Escuta erros globais vindos do domínio do Google (debug)
   window.addEventListener("error", (ev) => {
     const src = ev?.filename || "";
     if (/accounts\.google\.com|gstatic\.com/i.test(src)) {
@@ -124,7 +120,7 @@ class ErrorBoundary extends React.Component {
             </button>
             {IS_DEV && this.state.info ? (
               <pre className="text-left text-xs mt-4 overflow-auto max-h-48 opacity-80">
-{JSON.stringify(this.state.info, null, 2)}
+                {JSON.stringify(this.state.info, null, 2)}
               </pre>
             ) : null}
           </div>
@@ -166,7 +162,7 @@ root.render(
             if (IS_DEV) {
               console.info(
                 "%c[GSI] onScriptLoadSuccess",
-                "color:#16a34a", // green-600
+                "color:#16a34a",
                 "SDK do Google carregada com sucesso."
               );
             }
@@ -179,38 +175,72 @@ root.render(
         >
           <App />
           <ToastContainer
-            position="top-right"
-            autoClose={4000}
-            hideProgressBar={false}
-            newestOnTop
-            closeOnClick
-            pauseOnHover
-            draggable
-            theme="colored"
-            closeButton={<CloseBtn />}
-            toastClassName={() => "rounded-xl shadow ring-1 ring-black/5 text-sm"}
-            bodyClassName={() => "leading-relaxed"}
-          />
+  position="top-right"
+  autoClose={4000}
+  hideProgressBar={false}
+  newestOnTop
+  closeOnClick
+  pauseOnHover
+  draggable
+  theme="colored"               // 👈 fundo por cor do tipo
+  closeButton={<CloseBtn />}
+  toastClassName="rounded-xl shadow-lg ring-1 ring-black/10"
+  bodyClassName="text-sm leading-relaxed"
+/>
         </GoogleOAuthProvider>
       ) : (
         <>
-          {/* Renderiza o app mesmo sem o Provider, para não quebrar a UI */}
           <App />
           <ToastContainer
-            position="top-right"
-            autoClose={4000}
-            hideProgressBar={false}
-            newestOnTop
-            closeOnClick
-            pauseOnHover
-            draggable
-            theme="colored"
-            closeButton={<CloseBtn />}
-            toastClassName={() => "rounded-xl shadow ring-1 ring-black/5 text-sm"}
-            bodyClassName={() => "leading-relaxed"}
-          />
+  position="top-right"
+  autoClose={4000}
+  hideProgressBar={false}
+  newestOnTop
+  closeOnClick
+  pauseOnHover
+  draggable
+  theme="colored"          // usa as cores por tipo (success, error…)
+  closeButton={<CloseBtn />}
+  toastClassName="rounded-xl shadow-lg ring-1 ring-black/10"
+  bodyClassName="text-sm leading-relaxed"
+/>
         </>
       )}
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+//* ──────────────────────────────────────────────────────────────
+//PWA: registro do Service Worker + toasts (apenas produção)
+//────────────────────────────────────────────────────────────── */
+(function setupPWA() {
+if (!import.meta.env.PROD) return; // só no build
+if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+
+const showReloadToast = (confirm) => {
+ const id = toast.info("Atualização disponível — clique para recarregar.", {
+   autoClose: false,
+   closeOnClick: false,
+   draggable: false,
+   onClick: () => { try { confirm(); } finally { toast.dismiss(id); } },
+ });
+};
+
+// 👇 monta o nome do módulo sem usar string literal estática
+const PWA_MODULE_ID = ["virtual", "pwa-register"].join(":");
+
+import(/* @vite-ignore */ PWA_MODULE_ID)
+ .then(({ registerSW }) => {
+   const updateSW = registerSW({
+     immediate: true,
+     onNeedRefresh() { showReloadToast(() => updateSW(true)); },
+     onOfflineReady() { toast.success("App disponível offline! 🎉"); },
+   });
+ })
+ .catch((e) => {
+   // Em dev, o virtual module não existe mesmo — ignore.
+   if (import.meta.env.DEV) console.warn("[PWA] registro ignorado:", e?.message || e);
+ });
+})();
+
+  

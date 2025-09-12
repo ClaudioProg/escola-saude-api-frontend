@@ -326,10 +326,7 @@ export default function Cadastro() {
                   className="w-full px-4 py-2 rounded bg-white text-gray-800 placeholder-gray-400 focus:ring-2 focus:ring-lousa focus:outline-none"
                   autoComplete="off"
                 />
-                <p className="text-xs text-white/80 mt-1">
-                  Você pode digitar só números (<strong>000000</strong>).
-                </p>
-              </div>
+                              </div>
               <div>
                 <label htmlFor="dataNascimento" className="block text-sm mb-1">Data de nascimento</label>
                 <input
@@ -567,9 +564,8 @@ export default function Cadastro() {
         <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 text-sm flex flex-col sm:flex-row gap-2 sm:gap-6 items-center justify-between">
           <p>&copy; {new Date().getFullYear()} Escola Municipal de Saúde de Santos</p>
           <nav aria-label="links de rodapé" className="flex items-center gap-4">
-            <Link to="/ajuda" className="underline">Ajuda</Link>
             <Link to="/politica-privacidade" className="underline">Privacidade</Link>
-            <a href="mailto:escola.saude@santos.sp.gov.br" className="underline">Contato</a>
+            <a href="mailto:escoladasaude@santos.sp.gov.br" className="underline">Contato</a>
           </nav>
         </div>
       </footer>

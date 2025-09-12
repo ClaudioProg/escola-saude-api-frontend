@@ -361,9 +361,6 @@ export default function Perfil() {
                 placeholder="Ex.: 10.010-1"
                 disabled={salvando}
               />
-              <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
-                Você pode digitar só números (<strong>100101</strong>).
-              </p>
             </div>
 
             <div>

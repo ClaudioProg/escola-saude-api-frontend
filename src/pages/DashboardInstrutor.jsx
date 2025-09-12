@@ -1,6 +1,6 @@
 // ✅ src/pages/DashboardInstrutor.jsx
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+// import { useNavigate } from "react-router-dom"; // ❌ não usado
 import { toast } from "react-toastify";
 import TurmasInstrutor from "../components/TurmasInstrutor";
 import Breadcrumbs from "../components/Breadcrumbs";
@@ -47,7 +47,7 @@ const groupC = (label, fn) => {
 };
 
 export default function DashboardInstrutor() {
-  const navigate = useNavigate();
+  // const navigate = useNavigate(); // ❌ não usado
   const liveRef = useRef(null);
 
   let usuario = {};
@@ -95,9 +95,9 @@ export default function DashboardInstrutor() {
 
     groupC(`📦 carregarPresencas(turmaId=${turmaId})`, async () => {
       try {
-        console.time(`[time GET] /api/presencas/turma/${turmaId}/detalhes`);
-        const data = await apiGet(`/api/presencas/turma/${turmaId}/detalhes`, { on403: "silent" });
-        console.timeEnd(`[time GET] /api/presencas/turma/${turmaId}/detalhes`);
+        console.time(`[time GET] /presencas/turma/${turmaId}/detalhes`);
+        const data = await apiGet(`/presencas/turma/${turmaId}/detalhes`, { on403: "silent" });
+        console.timeEnd(`[time GET] /presencas/turma/${turmaId}/detalhes`);
 
         const datas = Array.isArray(data?.datas) ? data.datas : [];
         const usuarios = Array.isArray(data?.usuarios) ? data.usuarios : [];
@@ -140,9 +140,9 @@ export default function DashboardInstrutor() {
     setLive("Carregando suas turmas…");
     setCarregando(true);
     try {
-      console.time("[time GET] /api/agenda/instrutor");
-      const data = await apiGet("/api/agenda/instrutor", { on403: "silent" });
-      console.timeEnd("[time GET] /api/agenda/instrutor");
+      console.time("[time GET] /agenda/instrutor");
+      const data = await apiGet("/agenda/instrutor", { on403: "silent" });
+      console.timeEnd("[time GET] /agenda/instrutor");
 
       const arr = Array.isArray(data) ? data : [];
       const ordenadas = arr.slice().sort((a, b) => {
@@ -170,9 +170,9 @@ export default function DashboardInstrutor() {
     }
 
     try {
-      console.time("[time GET] /api/assinatura");
-      const a = await apiGet("/api/assinatura", { on403: "silent" });
-      console.timeEnd("[time GET] /api/assinatura");
+      console.time("[time GET] /assinatura");
+      const a = await apiGet("/assinatura", { on403: "silent" });
+      console.timeEnd("[time GET] /assinatura");
       setAssinatura(a?.assinatura || null);
       dbg("assinatura presente?", !!a?.assinatura);
     } catch (e) {
@@ -194,9 +194,9 @@ export default function DashboardInstrutor() {
     }
     groupC(`👥 carregarInscritos(turmaId=${turmaId})`, async () => {
       try {
-        console.time(`[time GET] /api/inscricoes/turma/${turmaId}`);
-        const data = await apiGet(`/api/inscricoes/turma/${turmaId}`, { on403: "silent" });
-        console.timeEnd(`[time GET] /api/inscricoes/turma/${turmaId}`);
+        console.time(`[time GET] /inscricoes/turma/${turmaId}`);
+        const data = await apiGet(`/inscricoes/turma/${turmaId}`, { on403: "silent" });
+        console.timeEnd(`[time GET] /inscricoes/turma/${turmaId}`);
         setInscritosPorTurma((prev) => ({ ...prev, [turmaId]: Array.isArray(data) ? data : [] }));
       } catch (err) {
         const info = { name: err?.name, message: err?.message, status: err?.status, url: err?.url, data: err?.data };
@@ -216,9 +216,9 @@ export default function DashboardInstrutor() {
 
     groupC(`📝 carregarAvaliacoes(turmaId=${turmaId})`, async () => {
       try {
-        console.time(`[time GET] /api/avaliacoes/turma/${turmaId}`);
-        const data = await apiGet(`/api/avaliacoes/turma/${turmaId}`, { on403: "silent" });
-        console.timeEnd(`[time GET] /api/avaliacoes/turma/${turmaId}`);
+        console.time(`[time GET] /avaliacoes/turma/${turmaId}`);
+        const data = await apiGet(`/avaliacoes/turma/${turmaId}`, { on403: "silent" });
+        console.timeEnd(`[time GET] /avaliacoes/turma/${turmaId}`);
 
         const lista =
           Array.isArray(data) ? data :
@@ -321,9 +321,9 @@ export default function DashboardInstrutor() {
   const gerarRelatorioPDF = async (turmaId) => {
     groupC(`📑 gerarRelatorioPDF(turmaId=${turmaId})`, async () => {
       try {
-        console.time(`[time GET] /api/presencas/turma/${turmaId}/detalhes (pdf)`);
-        const data = await apiGet(`/api/presencas/turma/${turmaId}/detalhes`, { on403: "silent" });
-        console.timeEnd(`[time GET] /api/presencas/turma/${turmaId}/detalhes (pdf)`);
+        console.time(`[time GET] /presencas/turma/${turmaId}/detalhes (pdf)`);
+        const data = await apiGet(`/presencas/turma/${turmaId}/detalhes`, { on403: "silent" });
+        console.timeEnd(`[time GET] /presencas/turma/${turmaId}/detalhes (pdf)`);
 
         const datas = Array.isArray(data?.datas) ? data.datas : [];
         const usuarios = Array.isArray(data?.usuarios) ? data.usuarios : [];
@@ -363,9 +363,9 @@ export default function DashboardInstrutor() {
       let alunos = inscritosPorTurma[turmaId];
       if (!alunos) {
         try {
-          console.time(`[time GET] /api/inscricoes/turma/${turmaId} (lista assinatura)`);
-          alunos = await apiGet(`/api/inscricoes/turma/${turmaId}`, { on403: "silent" });
-          console.timeEnd(`[time GET] /api/inscricoes/turma/${turmaId} (lista assinatura)`);
+          console.time(`[time GET] /inscricoes/turma/${turmaId} (lista assinatura)`);
+          alunos = await apiGet(`/inscricoes/turma/${turmaId}`, { on403: "silent" });
+          console.timeEnd(`[time GET] /inscricoes/turma/${turmaId} (lista assinatura)`);
         } catch (err) {
           const info = { name: err?.name, message: err?.message, status: err?.status, url: err?.url, data: err?.data };
           console.error("Erro ao carregar inscritos (lista assinatura):", info);
