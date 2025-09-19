@@ -14,10 +14,10 @@ import { apiGetMinhasPresencas } from "../services/api";
 import BotaoPrimario from "../components/BotaoPrimario";
 import CarregandoSkeleton from "../components/CarregandoSkeleton";
 import NadaEncontrado from "../components/NadaEncontrado";
-import Breadcrumbs from "../components/Breadcrumbs";
-import PageHeader from "../components/PageHeader";
 import Footer from "../components/Footer";
 import { formatarDataBrasileira } from "../utils/data";
+
+const CERT_THRESHOLD = 75; // meta de frequência p/ certificado
 
 function Badge({ children, tone = "default", title }) {
   const map = {
@@ -38,12 +38,48 @@ function Badge({ children, tone = "default", title }) {
   );
 }
 
-function ProgressBar({ value = 0 }) {
+function ProgressBar({ value = 0, threshold = CERT_THRESHOLD }) {
   const pct = Math.max(0, Math.min(100, value));
+  const ok = pct >= threshold;
   return (
-    <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden dark:bg-slate-800" role="meter" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-      <div className="h-full bg-emerald-600 dark:bg-emerald-500" style={{ width: `${pct}%` }} />
+    <div
+      className="w-full h-3 bg-slate-200 rounded-full overflow-hidden dark:bg-slate-800"
+      role="meter"
+      aria-valuenow={pct}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuetext={`${pct.toFixed(1)}%`}
+    >
+      <div
+        className={`h-full ${ok ? "bg-emerald-600 dark:bg-emerald-500" : "bg-rose-600 dark:bg-rose-500"}`}
+        style={{ width: `${pct}%` }}
+      />
     </div>
+  );
+}
+
+/* Header hero CENTRALIZADO com subtítulo e botão dentro do header */
+function HeaderHero({ onRefresh }) {
+  return (
+    <header className="bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-700 text-white">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-col items-center text-center gap-3">
+        <div className="inline-flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5" aria-hidden="true" />
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">Minhas Presenças</h1>
+        </div>
+        <p className="text-sm text-white/90">
+          Visualize suas presenças por evento/turma, frequência e elegibilidade para avaliação/certificado.
+        </p>
+        <BotaoPrimario
+          onClick={onRefresh}
+          variante="secundario"
+          icone={<RefreshCw className="w-4 h-4" />}
+          aria-label="Atualizar lista de presenças"
+        >
+          Atualizar
+        </BotaoPrimario>
+      </div>
+    </header>
   );
 }
 
@@ -72,13 +108,12 @@ export default function MinhasPresencas() {
 
   const turmas = useMemo(() => data?.turmas || [], [data]);
 
-  // Estados iniciais com skeleton, erro e vazio (tela inteira)
+  // Estados iniciais com skeleton, erro e vazio (sem breadcrumbs)
   if (loading) {
     return (
       <div className="flex flex-col min-h-screen bg-gelo dark:bg-zinc-900">
-        <PageHeader title="Minhas Presenças" icon={CheckCircle2} variant="laranja" />
+        <HeaderHero onRefresh={carregar} />
         <main role="main" className="flex-1 px-4 py-6 max-w-6xl mx-auto">
-          <Breadcrumbs trilha={[{ label: "Início", href: "/" }, { label: "Minhas Presenças" }]} />
           <CarregandoSkeleton titulo="Minhas Presenças" linhas={6} />
         </main>
         <Footer />
@@ -89,24 +124,14 @@ export default function MinhasPresencas() {
   if (erro) {
     return (
       <div className="flex flex-col min-h-screen bg-gelo dark:bg-zinc-900">
-        <PageHeader title="Minhas Presenças" icon={CheckCircle2} variant="laranja" />
+        <HeaderHero onRefresh={carregar} />
         <main role="main" className="flex-1 px-4 py-6 max-w-6xl mx-auto">
-          <Breadcrumbs trilha={[{ label: "Início", href: "/" }, { label: "Minhas Presenças" }]} />
           <div
             className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-lg dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-200"
             role="alert"
             aria-live="assertive"
           >
             {erro}
-          </div>
-          <div className="mt-3">
-            <BotaoPrimario
-              onClick={carregar}
-              icone={<RefreshCw className="w-4 h-4" />}
-              aria-label="Tentar carregar presenças novamente"
-            >
-              Tentar novamente
-            </BotaoPrimario>
           </div>
         </main>
         <Footer />
@@ -117,9 +142,8 @@ export default function MinhasPresencas() {
   if (!turmas.length) {
     return (
       <div className="flex flex-col min-h-screen bg-gelo dark:bg-zinc-900">
-        <PageHeader title="Minhas Presenças" icon={CheckCircle2} variant="laranja" />
+        <HeaderHero onRefresh={carregar} />
         <main role="main" className="flex-1 px-4 py-6 max-w-6xl mx-auto">
-          <Breadcrumbs trilha={[{ label: "Início", href: "/" }, { label: "Minhas Presenças" }]} />
           <NadaEncontrado
             titulo="Nenhuma presença encontrada"
             descricao="Você ainda não possui turmas com presença registrada."
@@ -132,32 +156,9 @@ export default function MinhasPresencas() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gelo dark:bg-zinc-900">
-      {/* 🟧 Cabeçalho (família Presenças) */}
-      <PageHeader title="Minhas Presenças" icon={CheckCircle2} variant="laranja" />
+      <HeaderHero onRefresh={carregar} />
 
       <main role="main" className="flex-1 px-4 py-6 max-w-6xl mx-auto">
-        <Breadcrumbs trilha={[{ label: "Início", href: "/" }, { label: "Minhas Presenças" }]} />
-
-        {/* Topo ações */}
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="sr-only">Minhas Presenças</h1>
-            <p className="text-slate-700 dark:text-slate-300 text-sm">
-              Visualize suas presenças por evento/turma, frequência e elegibilidade para avaliação/certificado.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <BotaoPrimario
-              onClick={carregar}
-              variante="secundario"
-              icone={<RefreshCw className="w-4 h-4" />}
-              aria-label="Atualizar lista de presenças"
-            >
-              Atualizar
-            </BotaoPrimario>
-          </div>
-        </div>
-
         {/* Lista de cards */}
         <div role="list" className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {turmas.map((t, idx) => {
@@ -165,8 +166,29 @@ export default function MinhasPresencas() {
               t.status === "andamento" ? "info" :
               t.status === "encerrado" ? "success" : "default";
 
-            const freq = Number(t.frequencia || 0); // já vem em %
-            const meets75 = !!t.elegivel_avaliacao;
+            // Consistência para frequência e ausências
+            const total = Number(t.total_encontros || 0);
+            const presentes = Number(t.presentes || 0);
+            const ausenciasCalc = Math.max(0, total - presentes);
+            const ausencias = Number(
+              typeof t.ausencias === "number" ? t.ausencias : ausenciasCalc
+            );
+
+            const freqRaw = typeof t.frequencia === "number"
+              ? t.frequencia
+              : total > 0 ? (presentes / total) * 100 : 0;
+            const freq = Math.max(0, Math.min(100, freqRaw));
+
+            const meets75 =
+              (t.elegivel_avaliacao === true) ||
+              (freq >= CERT_THRESHOLD && String(t.status).toLowerCase() === "encerrado");
+
+            // derivar datas de ausência se necessário
+            let datasAusencias = Array.isArray(t?.datas?.ausencias) ? t.datas.ausencias : null;
+            if (!datasAusencias && Array.isArray(t?.datas?.todas) && Array.isArray(t?.datas?.presentes)) {
+              const presSet = new Set(t.datas.presentes);
+              datasAusencias = t.datas.todas.filter((d) => !presSet.has(d));
+            }
 
             return (
               <motion.div
@@ -201,7 +223,7 @@ export default function MinhasPresencas() {
                   </div>
                 </div>
 
-                {/* Período (datas locais sem fuso) */}
+                {/* Período */}
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                   <CalendarDays className="w-4 h-4" />
                   <span>
@@ -210,19 +232,19 @@ export default function MinhasPresencas() {
                   </span>
                 </div>
 
-                {/* Métricas principais */}
+                {/* Métricas */}
                 <div className="mt-4 grid grid-cols-3 gap-3">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 text-center">
                     <div className="text-xs text-slate-500 dark:text-slate-300">Total encontros</div>
-                    <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t.total_encontros}</div>
+                    <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{total}</div>
                   </div>
                   <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/30 p-3 text-center">
                     <div className="text-xs text-emerald-700 dark:text-emerald-200">Presentes</div>
-                    <div className="text-lg font-semibold text-emerald-800 dark:text-emerald-100">{t.presentes}</div>
+                    <div className="text-lg font-semibold text-emerald-800 dark:text-emerald-100">{presentes}</div>
                   </div>
                   <div className="rounded-xl bg-rose-50 dark:bg-rose-900/30 p-3 text-center">
                     <div className="text-xs text-rose-700 dark:text-rose-200">Ausências</div>
-                    <div className="text-lg font-semibold text-rose-800 dark:text-rose-100">{t.ausencias}</div>
+                    <div className="text-lg font-semibold text-rose-800 dark:text-rose-100">{ausencias}</div>
                   </div>
                 </div>
 
@@ -232,7 +254,7 @@ export default function MinhasPresencas() {
                     <span className="text-slate-600 dark:text-slate-300">Frequência</span>
                     <span
                       className={`font-semibold ${
-                        freq >= 75
+                        freq >= CERT_THRESHOLD
                           ? "text-emerald-700 dark:text-emerald-300"
                           : "text-rose-700 dark:text-rose-300"
                       }`}
@@ -240,13 +262,13 @@ export default function MinhasPresencas() {
                       {freq.toFixed(1)}%
                     </span>
                   </div>
-                  <ProgressBar value={freq} />
+                  <ProgressBar value={freq} threshold={CERT_THRESHOLD} />
                   <div className="mt-1 text-xs text-slate-500 dark:text-slate-400" aria-live="polite">
-                    {freq >= 75 ? "Requisito de 75% atendido." : "Atenção: frequência abaixo de 75%."}
+                    {freq >= CERT_THRESHOLD ? "Requisito de 75% atendido." : "Atenção: frequência abaixo de 75%."}
                   </div>
                 </div>
 
-                {/* Datas do usuário (anti-UTC: apenas formatação local) */}
+                {/* Datas */}
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
                     <div className="flex items-center gap-2 mb-2 text-slate-800 dark:text-slate-100">
@@ -274,9 +296,9 @@ export default function MinhasPresencas() {
                       <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                       <span className="text-sm font-medium">Datas de Ausência</span>
                     </div>
-                    {t.datas?.ausencias?.length ? (
+                    {Array.isArray(datasAusencias) && datasAusencias.length ? (
                       <div className="flex flex-wrap gap-2">
-                        {t.datas.ausencias.map((d) => (
+                        {datasAusencias.map((d) => (
                           <span
                             key={d}
                             className="px-2 py-0.5 rounded-md text-xs bg-rose-50 text-rose-800 dark:bg-rose-900/30 dark:text-rose-200"
@@ -296,7 +318,6 @@ export default function MinhasPresencas() {
         </div>
       </main>
 
-      {/* Rodapé institucional */}
       <Footer />
     </div>
   );
