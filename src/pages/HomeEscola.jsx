@@ -94,7 +94,8 @@ export default function HomeEscola() {
 
               <p>👉 Venha participar, trazer sua experiência e fortalecer ainda mais a nossa rede de cuidado.</p>
               <p>
-                <strong> Inscrições serão abertas em breve! </strong> 
+                <strong className="text-blue-600 dark:text-blue-400 font-bold"> 
+                  Inscrições serão abertas em breve! </strong> 
                 </p>
               <p>Porque o SUS se constrói todos os dias, com a contribuição de cada trabalhadora e trabalhador da saúde.</p>
             </DestaqueLongo>
@@ -122,7 +123,8 @@ export default function HomeEscola() {
   </p>
 
   <p>
-    <strong>💡 Prevenção e autocuidado</strong>
+    <strong>
+      💡 Prevenção e autocuidado</strong>
   </p>
   <p>
     Autoexame das mamas: deve ser feito regularmente, conhecendo o próprio corpo
