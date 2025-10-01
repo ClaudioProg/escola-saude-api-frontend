@@ -94,7 +94,7 @@ export default function HomeEscola() {
 
               <p>👉 Venha participar, trazer sua experiência e fortalecer ainda mais a nossa rede de cuidado.</p>
               <p>
-                <strong className="text-blue-600 dark:text-blue-400 font-bold"> 
+                <strong className="text-red-600 dark:text-red-400 font-bold"> 
                   Inscrições serão abertas em breve! </strong> 
                 </p>
               <p>Porque o SUS se constrói todos os dias, com a contribuição de cada trabalhadora e trabalhador da saúde.</p>
@@ -156,7 +156,83 @@ export default function HomeEscola() {
   </p>
 </DestaqueLongo>
 
+{/* 3) Saúde Mental */}
+<DestaqueLongo
+  imgSrc="/banners/saude-mental.png"
+  imgAlt="Arte do Dia Mundial da Saúde Mental"
+  titulo="💙 Dia Mundial da Saúde Mental"
+  subtitulo="10 de Outubro"
+  badge="Datas Importantes"
+>
+  <p>
+  O Dia Mundial da Saúde Mental foi instituído em 1992 pela Federação Mundial para a Saúde Mental (World Federation for Mental Health), com apoio da Organização Mundial da Saúde (OMS). Desde então, a data é lembrada anualmente em mais de 150 países como um chamado à reflexão e à ação sobre um tema que toca a todos nós: o cuidado com a saúde mental.
+  </p>
 
+  <p>
+  Ao longo da história, falar de saúde mental foi cercado de tabus e estigmas. Felizmente, hoje sabemos que cuidar da mente é tão essencial quanto cuidar do corpo. Depressão, ansiedade, estresse, síndrome de burnout e outros transtornos afetam milhões de pessoas, comprometendo qualidade de vida, relações sociais e até mesmo a saúde física.
+  </p>
+
+  <p> <strong> 🌱 A importância da data</strong> </p>
+  <p>
+  O objetivo deste dia é conscientizar, informar e promover o acolhimento. Mais do que um lembrete, ele nos inspira a criar ambientes mais saudáveis, relações mais empáticas e sociedades mais inclusivas.
+  </p>
+
+  <p> <strong>🌍 💡 Orientações e cuidados</strong> </p>
+
+  <p> Fale sobre o que sente: não guarde suas angústias só para você. Compartilhar é o primeiro passo para aliviar o peso. </p>
+  <p> Procure ajuda profissional: psicólogos e psiquiatras são aliados importantes no cuidado com a saúde mental. </p>
+  <p> Cuide do corpo para cuidar da mente: sono de qualidade, boa alimentação e atividade física regular influenciam diretamente o equilíbrio emocional. </p>
+  <p> Pratique pausas e lazer: reservar tempo para descansar e fazer o que gosta é fundamental. </p>
+  <p> Cultive vínculos: relações de amizade, familiares e de apoio são verdadeiros protetores da nossa saúde mental. </p>
+
+  <p> <strong>🌍 Um compromisso coletivo</strong> </p>
+  <p>
+  A saúde mental não é apenas uma questão individual, mas também coletiva. Precisamos construir juntos uma cultura de respeito, empatia e solidariedade, combatendo preconceitos e abrindo espaço para o diálogo.
+  </p>
+
+  <p>
+    <strong>Neste 10 de outubro, lembre-se: cuidar da mente é cuidar da vida. 💙</strong>
+  </p>
+</DestaqueLongo>
+
+{/* 4) Vacinação */}
+<DestaqueLongo
+  imgSrc="/banners/vacinacao.png"
+  imgAlt="Arte do Dia Nacional de Vacinação"
+  titulo="💉 Dia Nacional da Vacinação"
+  subtitulo="17 de Outubro"
+  badge="Datas Importantes"
+>
+  <p>
+  O Dia Nacional da Vacinação foi instituído no Brasil para reforçar a importância da imunização como uma das ferramentas mais eficazes de prevenção de doenças. Essa data simboliza não apenas a vitória da ciência, mas também o compromisso coletivo com a proteção da vida. (OMS). Desde então, a data é lembrada anualmente em mais de 150 países como um chamado à reflexão e à ação sobre um tema que toca a todos nós: o cuidado com a saúde mental.
+  </p>
+
+  <p>
+  Graças às vacinas, o Brasil e o mundo conseguiram controlar ou até mesmo erradicar doenças que antes causavam sofrimento, incapacidades e mortes, como a varíola, a poliomielite e o sarampo. Cada dose aplicada representa um ato de cuidado consigo mesmo e com toda a comunidade.
+  </p>
+
+  <p> <strong> 🌱 A importância da data</strong> </p>
+  <p>
+  Celebrar o 17 de outubro é reconhecer o papel fundamental da vacinação na saúde pública e lembrar que a imunização é um direito e um dever. É também uma forma de valorizar o trabalho incansável de profissionais de saúde que, todos os dias, garantem que os imunobiológicos cheguem à população.
+  </p>
+
+  <p> <strong>🌍 💡 Orientações e cuidados</strong> </p>
+
+  <p> Mantenha a caderneta em dia: verifique periodicamente se todas as vacinas recomendadas foram aplicadas. </p>
+  <p> Vacine crianças, adolescentes, adultos e idosos: todas as fases da vida contam com vacinas específicas e essenciais. </p>
+  <p> Confie na ciência: vacinas são seguras, passam por rigorosos processos de pesquisa e controle de qualidade. </p>
+  <p> Proteção coletiva: quanto mais pessoas vacinadas, menor a circulação de doenças e maior a proteção de toda a sociedade. </p>
+  <p> Participe das campanhas nacionais: aproveite os dias de mobilização para atualizar suas doses. </p>
+
+  <p> <strong>🌍 Um compromisso de todos</strong> </p>
+  <p>
+  A vacinação é um ato de amor, responsabilidade e solidariedade. Ao nos vacinarmos, protegemos não apenas a nós mesmos, mas também nossos familiares, amigos e toda a comunidade.
+  </p>
+
+  <p>
+    <strong>Neste 17 de outubro, reafirme o compromisso com a vida: vacine-se e incentive quem você ama a fazer o mesmo. 💉💙</strong>
+  </p>
+</DestaqueLongo>
 
           </div>
         </section>
