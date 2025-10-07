@@ -251,12 +251,14 @@ function MonthYearPicker({
 }
 
 export default function UsuarioSubmissoes() {
+  const [linhasByChamada, setLinhasByChamada] = useState({}); // { chamadaId: { byCodigo: {COD: nome}, byId: {id: nome} } }
   const [ativas, setAtivas] = useState([]);
   const [loadingAtivas, setLoadingAtivas] = useState(true);
   const [modeloOk, setModeloOk] = useState({}); // { [chamadaId]: boolean }
 
   const [minhas, setMinhas] = useState([]);
   const [loadingMinhas, setLoadingMinhas] = useState(true);
+  const [linhasCarregando, setLinhasCarregando] = useState(false);
 
   const [editalOpen, setEditalOpen] = useState(false);
   const [submeterOpen, setSubmeterOpen] = useState(false);
@@ -334,11 +336,29 @@ export default function UsuarioSubmissoes() {
       try {
         setLoadingMinhas(true);
         const mine = await apiGet(`/minhas-submissoes`);
-        setMinhas(Array.isArray(mine) ? mine : []);
+        const sane = Array.isArray(mine) ? mine : [];
+        setMinhas(sane);
+
+        // 🔎 Carrega mapa de linhas por chamada para mostrar o NOME na lista
+        const ids = Array.from(new Set(sane.map(x => x.chamada_id).filter(Boolean)));
+        if (ids.length) {
+          setLinhasCarregando(true);
+          const entries = await Promise.all(ids.map(async (id) => {
+            try {
+              const det = await apiGet(`/chamadas/${id}`);
+              const linhas = Array.isArray(det?.linhas) ? det.linhas : [];
+              const byCodigo = Object.fromEntries(linhas.map(l => [l.codigo, l.nome]));
+              const byId = Object.fromEntries(linhas.map(l => [String(l.id), l.nome]));
+              return [id, { byCodigo, byId }];
+            } catch { return [id, { byCodigo: {}, byId: {} }]; }
+          }));
+          setLinhasByChamada(Object.fromEntries(entries));
+        }
       } catch {
         setMinhas([]);
       } finally {
         setLoadingMinhas(false);
+        setLinhasCarregando(false);
       }
     })();
 
@@ -704,7 +724,11 @@ export default function UsuarioSubmissoes() {
                         <tr key={s.id} className="border-t dark:border-zinc-800">
                           <td className="py-2 pr-4">{s.titulo}</td>
                           <td className="py-2 pr-4">{s.chamada_titulo}</td>
-                          <td className="py-2 pr-4">{s.linha_tematica_nome || s.linha_tematica || s.linha_tematica_codigo || "—"}</td>
+                          <td className="py-2 pr-4">{
+                            (linhasByChamada[s.chamada_id]?.byCodigo?.[s.linha_tematica_codigo]) ||
+                            (linhasByChamada[s.chamada_id]?.byId?.[String(s.linha_tematica_id || "")]) ||
+                            s.linha_tematica_nome || s.linha_tematica || s.linha_tematica_codigo || "—"
+                          }</td>
                           <td className="py-2 pr-4">{s.inicio_experiencia}</td>
                           <td className="py-2 pr-4">
                             <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
