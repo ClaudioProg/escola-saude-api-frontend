@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 // 📁 src/components/ModalTurma.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   Clock,
@@ -27,8 +27,7 @@ import ModalBase from "./ModalBase"; // ⬅️ portal + z-index empilhável
 
 /* ===================== Helpers ===================== */
 
-// Limite de caracteres do nome da turma
-const NOME_TURMA_MAX = 100;
+const NOME_TURMA_MAX = 100; // limite do título
 
 // Retorna "HH:MM" válida OU "" (sem fallback!)
 const parseHora = (val) => {
@@ -73,11 +72,7 @@ const isoDay = (v) => {
 const parseDataFlex = (s) => {
   if (!s) return "";
   const t = String(s).trim();
-
-  // ISO
   if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
-
-  // BR
   const m = t.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if (m) {
     const dd = m[1], mm = m[2], yyyy = m[3];
@@ -104,7 +99,6 @@ const calcularCargaHorariaTotal = (arr) => {
 const datasParaEncontros = (t) => {
   const baseHi = hhmm(t?.horario_inicio, "08:00");
   const baseHf = hhmm(t?.horario_fim, "17:00");
-
   if (!Array.isArray(t?.datas)) return null;
 
   const arr = t.datas
@@ -178,9 +172,7 @@ const temSobreposicao = (encontros) => {
       .sort((a, b) => (a.ini < b.ini ? -1 : a.ini > b.ini ? 1 : 0));
 
     for (let i = 1; i < arr.length; i++) {
-      if (arr[i].ini < arr[i - 1].fim) {
-        return true; // sobreposição: início atual < fim anterior
-      }
+      if (arr[i].ini < arr[i - 1].fim) return true;
     }
   }
   return false;
@@ -195,37 +187,6 @@ const dedupEncontros = (lista) => {
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({ data: isoDay(e.data), inicio: hhmm(e.inicio, ""), fim: hhmm(e.fim, "") });
-  }
-  return out;
-};
-
-// tenta extrair encontros de um texto colado (linhas), aceita:
-//  - "21/11/2025 08:00-12:00"
-//  - "2025-11-22 13:30 17:30"
-//  - "2025-11-23" (usa horários padrão fornecidos)
-const parseEncontrosFromText = (text, defInicio = "08:00", defFim = "17:00") => {
-  const linhas = String(text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const out = [];
-  for (const l of linhas) {
-    // BR com faixa "HH:MM-HH:MM"
-    let m = l.match(/^(\d{2}\/\d{2}\/\d{4})\s+(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})$/);
-    if (m) {
-      const d = parseDataFlex(m[1]);
-      const ini = hhmm(m[2], defInicio);
-      const fim = hhmm(m[3], defFim);
-      if (d && ini && fim) { out.push({ data: d, inicio: ini, fim }); continue; }
-    }
-    // ISO com dois horários separados por espaço
-    m = l.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})$/);
-    if (m) {
-      const d = parseDataFlex(m[1]);
-      const ini = hhmm(m[2], defInicio);
-      const fim = hhmm(m[3], defFim);
-      if (d && ini && fim) { out.push({ data: d, inicio: ini, fim }); continue; }
-    }
-    // Apenas data (BR ou ISO)
-    const dOnly = parseDataFlex(l);
-    if (dOnly) out.push({ data: dOnly, inicio: defInicio, fim: defFim });
   }
   return out;
 };
@@ -248,21 +209,14 @@ export default function ModalTurma({
   // cada encontro no estado: { data:'YYYY-MM-DD', inicio:'HH:MM', fim:'HH:MM' }
   const [encontros, setEncontros] = useState(encontrosDoInitial(initialTurma));
 
-  // 🔹 Quick-Add (geração por intervalo)
-  const [qaInicio, setQaInicio] = useState("");
-  const [qaFim, setQaFim] = useState("");
-  const [qaHoraInicio, setQaHoraInicio] = useState("08:00");
-  const [qaHoraFim, setQaHoraFim] = useState("17:00");
-  const [qaDias, setQaDias] = useState({
-    dom: false,
-    seg: true,
-    ter: true,
-    qua: true,
-    qui: true,
-    sex: true,
-    sab: false,
-  });
-  const diasIdx = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
+  // ref para autosize do título
+  const refNome = useRef(null);
+  const autosizeNome = () => {
+    const el = refNome.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`; // até ~200px (≈ 6-8 linhas)
+  };
 
   // Reidrata quando abrir/editar
   useEffect(() => {
@@ -272,14 +226,15 @@ export default function ModalTurma({
 
     setNome(initialTurma?.nome || "");
     setVagasTotal(
-      initialTurma?.vagas_total != null
-        ? String(initialTurma.vagas_total)
-        : ""
+      initialTurma?.vagas_total != null ? String(initialTurma.vagas_total) : ""
     );
 
     const enc = encontrosDoInitial(initialTurma);
     console.log("→ encontros reidratados:", enc);
     setEncontros(enc);
+
+    // garante autosize inicial ao abrir
+    setTimeout(autosizeNome, 0);
 
     console.groupEnd();
   }, [isOpen, initialTurma]);
@@ -349,92 +304,10 @@ export default function ModalTurma({
     console.groupEnd();
   };
 
-  // Gera encontros por intervalo de datas + dias da semana
-  const gerarEncontrosIntervalo = () => {
-    console.group("[gerarEncontrosIntervalo]");
-    const ini = parseDataFlex(qaInicio);
-    const fim = parseDataFlex(qaFim);
-    const hi = hhmm(qaHoraInicio, "08:00");
-    const hf = hhmm(qaHoraFim, "17:00");
-
-    if (!ini || !fim) {
-      toast.warning("Informe início e fim do período.");
-      console.groupEnd();
-      return;
-    }
-    if (hf <= hi) {
-      toast.error("Horário final deve ser maior que o inicial.");
-      console.groupEnd();
-      return;
-    }
-
-    const start = new Date(`${ini}T00:00:00`);
-    const end = new Date(`${fim}T00:00:00`);
-    if (end < start) {
-      toast.error("Período inválido.");
-      console.groupEnd();
-      return;
-    }
-
-    const diasPermitidos = diasIdx
-      .map((k, idx) => (qaDias[k] ? idx : null))
-      .filter((x) => x != null); // 0=dom,...,6=sab
-
-    if (diasPermitidos.length === 0) {
-      toast.info("Selecione pelo menos um dia da semana.");
-      console.groupEnd();
-      return;
-    }
-
-    const novos = [];
-    const cursor = new Date(start);
-    while (cursor <= end) {
-      const dow = cursor.getDay(); // 0..6
-      if (diasPermitidos.includes(dow)) {
-        const d = cursor.toISOString().slice(0, 10);
-        novos.push({ data: d, inicio: hi, fim: hf });
-      }
-      cursor.setDate(cursor.getDate() + 1);
-    }
-
-    if (novos.length === 0) {
-      toast.info("Nenhuma data gerada para os dias selecionados.");
-      console.groupEnd();
-      return;
-    }
-
-    setEncontros((prev) => {
-      const merged = dedupEncontros([...prev, ...novos]);
-      console.log("→ encontros após geração:", merged);
-      return merged;
-    });
-    console.groupEnd();
-  };
-
-  // Colar em massa (linhas soltas)
-  const onPasteEncontros = (evt) => {
-    const txt = evt.clipboardData?.getData("text") || "";
-    if (!txt) return;
-    evt.preventDefault();
-
-    const hi = hhmm(qaHoraInicio, "08:00");
-    const hf = hhmm(qaHoraFim, "17:00");
-    const parsed = parseEncontrosFromText(txt, hi, hf);
-    if (!parsed.length) {
-      toast.info("Nada reconhecido nas linhas coladas.");
-      return;
-    }
-    setEncontros((prev) => dedupEncontros([...prev, ...parsed]));
-  };
-
   /* ===================== validação e salvar ===================== */
   const validar = () => {
     console.group("[validar turma]");
-    console.log("estado atual:", {
-      nome,
-      vagasTotal,
-      encontrosOrdenados,
-    });
+    console.log("estado atual:", { nome, vagasTotal, encontrosOrdenados });
 
     if (!nome.trim()) {
       toast.warning("Informe o nome da turma.");
@@ -535,11 +408,11 @@ export default function ModalTurma({
     console.log("➡️ Chamando onSalvar(payload):", payload);
     onSalvar?.(payload);
 
-    // Limpa somente se for criação (em edição o controle é do pai)
     if (!initialTurma) {
       setNome("");
       setVagasTotal("");
       setEncontros([{ data: "", inicio: "", fim: "" }]);
+      setTimeout(autosizeNome, 0);
     }
     console.groupEnd();
   };
@@ -576,130 +449,28 @@ export default function ModalTurma({
             {initialTurma ? "Editar Turma" : "Nova Turma"}
           </h2>
           <p id={descId} className="text-white/90 text-sm mt-1">
-            Defina nome, encontros e vagas. A carga horária é estimada
-            automaticamente.
+            Defina nome, encontros e vagas. A carga horária é estimada automaticamente.
           </p>
         </header>
 
         {/* Ministats */}
         <section className="px-5 pt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="rounded-2xl border border-indigo-100 dark:border-indigo-900 p-3 shadow-sm bg-white dark:bg-slate-900">
-            <div className="text-xs text-slate-500 dark:text-slate-300 mb-1">
-              Período
-            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-300 mb-1">Período</div>
             <div className="text-sm font-semibold">
               {data_inicio && data_fim
-                ? `${data_inicio.split("-").reverse().join("/")} — ${data_fim
-                    .split("-")
-                    .reverse()
-                    .join("/")}`
+                ? `${data_inicio.split("-").reverse().join("/")} — ${data_fim.split("-").reverse().join("/")}`
                 : "—"}
             </div>
           </div>
           <div className="rounded-2xl border border-indigo-100 dark:border-indigo-900 p-3 shadow-sm bg-white dark:bg-slate-900">
-            <div className="text-xs text-slate-500 dark:text-slate-300 mb-1">
-              Encontros
-            </div>
-            <div className="text-sm font-semibold">
-              {encontrosOrdenados.length || "—"}
-            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-300 mb-1">Encontros</div>
+            <div className="text-sm font-semibold">{encontrosOrdenados.length || "—"}</div>
           </div>
           <div className="rounded-2xl border border-indigo-100 dark:border-indigo-900 p-3 shadow-sm bg-white dark:bg-slate-900">
-            <div className="text-xs text-slate-500 dark:text-slate-300 mb-1">
-              Carga estimada
-            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-300 mb-1">Carga estimada</div>
             <div className="text-sm font-semibold">
               {carga_horaria_preview ? `${carga_horaria_preview}h` : "—"}
-            </div>
-          </div>
-        </section>
-
-        {/* Quick-Add por intervalo */}
-        <section className="px-5 pt-4">
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-3 bg-slate-50/60 dark:bg-zinc-800/40">
-            <div className="text-sm font-semibold mb-2">Gerar encontros por intervalo</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="flex items-center gap-2">
-                <CalendarDays className="text-slate-500" size={18} aria-hidden />
-                <div className="flex items-center gap-2 w-full">
-                  <input
-                    type="date"
-                    value={qaInicio}
-                    onChange={(e) => setQaInicio(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-zinc-900"
-                    aria-label="Início do período"
-                  />
-                  <span className="text-xs text-slate-600">a</span>
-                  <input
-                    type="date"
-                    value={qaFim}
-                    onChange={(e) => setQaFim(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-zinc-900"
-                    aria-label="Fim do período"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Clock className="text-slate-500" size={18} aria-hidden />
-                <div className="flex items-center gap-2 w-full">
-                  <input
-                    type="time"
-                    value={qaHoraInicio}
-                    onChange={(e) => setQaHoraInicio(hhmm(e.target.value, "08:00"))}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-zinc-900"
-                    aria-label="Horário inicial padrão"
-                  />
-                  <span className="text-xs text-slate-600">às</span>
-                  <input
-                    type="time"
-                    value={qaHoraFim}
-                    onChange={(e) => setQaHoraFim(hhmm(e.target.value, "17:00"))}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-zinc-900"
-                    aria-label="Horário final padrão"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-3 items-center">
-              {diasIdx.map((k, i) => (
-                <label key={k} className="inline-flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={qaDias[k]}
-                    onChange={(e) => setQaDias((d) => ({ ...d, [k]: e.target.checked }))}
-                  />
-                  <span className="uppercase">
-                    {["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][i]}
-                  </span>
-                </label>
-              ))}
-              <div className="ml-auto">
-                <button
-                  type="button"
-                  onClick={gerarEncontrosIntervalo}
-                  className="inline-flex items-center gap-2 rounded-xl px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
-                >
-                  <PlusCircle size={16} />
-                  Gerar
-                </button>
-              </div>
-            </div>
-
-            {/* Área de colar em massa */}
-            <div className="mt-3">
-              <label className="text-xs text-slate-600 dark:text-slate-300">
-                Colar encontros (um por linha). Exemplos:
-                <code className="ml-1">21/11/2025 08:00-12:00</code> •
-                <code className="ml-1">2025-11-22 13:30 17:30</code> •
-                <code className="ml-1">2025-11-23</code>
-              </label>
-              <textarea
-                onPaste={onPasteEncontros}
-                placeholder="Cole aqui (Enter separa linhas)"
-                className="mt-1 w-full min-h[80px] px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-zinc-900"
-              />
             </div>
           </div>
         </section>
@@ -710,42 +481,38 @@ export default function ModalTurma({
             e.preventDefault();
             handleSalvar();
           }}
-          className="px-5 pt-4 pb-24 overflow-y-auto max-h[60vh] bg-white dark:bg-zinc-900"
+          className="px-5 pt-4 pb-24 overflow-y-auto max-h-[60vh] bg-white dark:bg-zinc-900"
         >
-          {/* Nome */}
+          {/* Nome (textarea multiline com autosize e contador) */}
           <div className="relative mb-4">
-            <Type
-              className="absolute left-3 top-3 text-slate-500"
-              size={18}
-              aria-hidden
-            />
-            <input
-              type="text"
+            <Type className="absolute left-3 top-3 text-slate-500" size={18} aria-hidden />
+            <textarea
+              ref={refNome}
+              tabIndex={1}
               value={nome}
               onChange={(e) => {
-                // garante corte a 100 e estado consistente
                 const v = e.target.value.slice(0, NOME_TURMA_MAX);
                 setNome(v);
+                // autosize
+                e.target.style.height = "auto";
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
               }}
               placeholder="Nome da turma"
               maxLength={NOME_TURMA_MAX}
-              className="w-full pl-10 pr-14 py-2 border rounded-xl shadow-sm dark:bg-zinc-900 dark:text-white border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              rows={2}
+              className="w-full pl-10 pr-14 py-2 border rounded-xl shadow-sm dark:bg-zinc-900 dark:text-white border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[56px] max-h-[200px] overflow-y-auto resize-none"
               autoComplete="off"
               aria-describedby="nome-turma-help nome-turma-count"
             />
-
             {/* contador */}
             <div
               id="nome-turma-count"
               className={`absolute right-3 top-2 text-xs ${
-                nome.length >= NOME_TURMA_MAX * 0.9
-                  ? "text-amber-600"
-                  : "text-slate-500"
+                nome.length >= NOME_TURMA_MAX * 0.9 ? "text-amber-600" : "text-slate-500"
               }`}
             >
               {nome.length}/{NOME_TURMA_MAX}
             </div>
-
             <p id="nome-turma-help" className="mt-1 text-xs text-slate-500">
               Máximo de {NOME_TURMA_MAX} caracteres.
             </p>
@@ -753,75 +520,52 @@ export default function ModalTurma({
 
           {/* Encontros */}
           <div className="space-y-3">
-            <div className="font-semibold text-sm text-slate-800 dark:text-slate-100">
-              Encontros
-            </div>
+            <div className="font-semibold text-sm text-slate-800 dark:text-slate-100">Encontros</div>
             {encontros.map((e, idx) => (
-              <div
-                key={idx}
-                className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end"
-              >
+              <div key={idx} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                 <div className="relative">
-                  <CalendarDays
-                    className="absolute left-3 top-3 text-slate-500"
-                    size={18}
-                    aria-hidden
-                  />
+                  <CalendarDays className="absolute left-3 top-3 text-slate-500" size={18} aria-hidden />
                   <input
+                    tabIndex={10 + idx * 3}
                     type="date"
                     value={isoDay(e.data)}
-                    onChange={(ev) => {
-                      updateEncontro(idx, "data", ev.target.value);
-                    }}
+                    onChange={(ev) => updateEncontro(idx, "data", ev.target.value)}
                     className="w-full pl-10 py-2 border rounded-xl shadow-sm dark:bg-zinc-900 dark:text-white border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     required
                   />
                 </div>
                 <div className="relative">
-                  <Clock
-                    className="absolute left-3 top-3 text-slate-500"
-                    size={18}
-                    aria-hidden
-                  />
+                  <Clock className="absolute left-3 top-3 text-slate-500" size={18} aria-hidden />
                   <input
+                    tabIndex={11 + idx * 3}
                     type="time"
                     value={hhmm(e.inicio, "")}
-                    onChange={(ev) => {
-                      updateEncontro(idx, "inicio", ev.target.value);
-                    }}
+                    onChange={(ev) => updateEncontro(idx, "inicio", ev.target.value)}
                     className="w-full pl-10 py-2 border rounded-xl shadow-sm dark:bg-zinc-900 dark:text-white border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     required
                   />
                 </div>
                 <div className="relative">
-                  <Clock
-                    className="absolute left-3 top-3 text-slate-500"
-                    size={18}
-                    aria-hidden
-                  />
+                  <Clock className="absolute left-3 top-3 text-slate-500" size={18} aria-hidden />
                   <div className="flex gap-2">
                     <input
+                      tabIndex={12 + idx * 3}
                       type="time"
                       value={hhmm(e.fim, "")}
-                      onChange={(ev) => {
-                        updateEncontro(idx, "fim", ev.target.value);
-                      }}
+                      onChange={(ev) => updateEncontro(idx, "fim", ev.target.value)}
                       className="w-full pl-10 py-2 border rounded-xl shadow-sm dark:bg-zinc-900 dark:text-white border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       required
                     />
                     {encontros.length > 1 && (
                       <button
                         type="button"
-                        onClick={() => {
-                          removeEncontro(idx);
-                        }}
+                        onClick={() => removeEncontro(idx)}
                         className="px-3 py-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-200 dark:hover:bg-rose-900/30"
                         title="Remover este encontro"
+                        tabIndex={-1}
                       >
                         <Trash2 size={16} aria-hidden />
-                        <span className="sr-only">
-                          Remover encontro {idx + 1}
-                        </span>
+                        <span className="sr-only">Remover encontro {idx + 1}</span>
                       </button>
                     )}
                   </div>
@@ -834,6 +578,7 @@ export default function ModalTurma({
                 type="button"
                 onClick={addEncontro}
                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-full transition"
+                tabIndex={9 + encontros.length * 3}
               >
                 <PlusCircle size={16} />
                 Adicionar data
@@ -843,17 +588,12 @@ export default function ModalTurma({
 
           {/* Vagas */}
           <div className="relative mt-5">
-            <Hash
-              className="absolute left-3 top-3 text-slate-500"
-              size={18}
-              aria-hidden
-            />
+            <Hash className="absolute left-3 top-3 text-slate-500" size={18} aria-hidden />
             <input
+              tabIndex={200}
               type="number"
               value={vagasTotal}
-              onChange={(e) => {
-                setVagasTotal(e.target.value);
-              }}
+              onChange={(e) => setVagasTotal(e.target.value)}
               placeholder="Quantidade de vagas"
               className="w-full pl-10 py-2 border rounded-xl shadow-sm dark:bg-zinc-900 dark:text-white border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               min={1}
@@ -865,16 +605,14 @@ export default function ModalTurma({
 
         {/* Rodapé sticky */}
         <div className="mt-auto sticky bottom-0 left-0 right-0 bg-white/85 dark:bg-zinc-950/85 backdrop-blur border-t border-slate-200 dark:border-slate-800 px-5 py-3 flex justify-between gap-3">
-          {/* manter tipo estável: sempre um <div> contendo algo */}
           <div className="min-w-[1.5rem]">
             {initialTurma?.id && onExcluir ? (
               <button
                 type="button"
                 className="flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-600 text-white hover:bg-rose-700 transition"
-                onClick={() => {
-                  onExcluir();
-                }}
+                onClick={() => onExcluir()}
                 title="Excluir turma"
+                tabIndex={300}
               >
                 <Trash2 size={16} />
                 Excluir turma
@@ -884,11 +622,10 @@ export default function ModalTurma({
 
           <div className="flex gap-3">
             <button
-              onClick={() => {
-                onClose();
-              }}
+              onClick={() => onClose()}
               className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-700 transition"
               type="button"
+              tabIndex={301}
             >
               Cancelar
             </button>
@@ -896,6 +633,7 @@ export default function ModalTurma({
               onClick={handleSalvar}
               className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition"
               type="button"
+              tabIndex={302}
             >
               Salvar Turma
             </button>
