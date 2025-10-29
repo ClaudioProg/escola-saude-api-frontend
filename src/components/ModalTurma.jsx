@@ -1,41 +1,17 @@
 /* eslint-disable no-console */
 // 📁 src/components/ModalTurma.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  CalendarDays,
-  Clock,
-  Hash,
-  Type,
-  PlusCircle,
-  Trash2,
-} from "lucide-react";
+import { CalendarDays, Clock, Hash, Type, PlusCircle, Trash2 } from "lucide-react";
 import { toast } from "react-toastify";
-import ModalBase from "./ModalBase"; // ⬅️ portal + z-index empilhável
-
-/**
- * Props:
- *  - isOpen: boolean
- *  - onClose: () => void
- *  - onSalvar: (turmaPayload) => void
- *  - initialTurma?: {
- *      id?, nome, vagas_total, carga_horaria?, horario_inicio?, horario_fim?,
- *      encontros?: [{ data:'YYYY-MM-DD', inicio:'HH:MM', fim:'HH:MM' }],
- *      datas?: [{ data:'YYYY-MM-DD', horario_inicio:'HH:MM', horario_fim:'HH:MM' }]
- *    }
- *  - onExcluir?: () => void
- */
+import ModalBase from "./ModalBase";
 
 /* ===================== Helpers ===================== */
+const NOME_TURMA_MAX = 100;
 
-const NOME_TURMA_MAX = 100; // limite do título
-
-// Retorna "HH:MM" válida OU "" (sem fallback!)
 const parseHora = (val) => {
   if (typeof val !== "string") return "";
   const s = val.trim();
   if (!s) return "";
-
-  // "0800" -> "08:00"
   if (/^\d{3,4}$/.test(s)) {
     const raw = s.length === 3 ? "0" + s : s;
     const H = raw.slice(0, 2);
@@ -44,44 +20,21 @@ const parseHora = (val) => {
     const mm = String(Math.min(59, Math.max(0, parseInt(M || "0", 10)))).padStart(2, "0");
     return `${hh}:${mm}`;
   }
-
-  // "8:0", "08:00", "08:00:00"
   const m = s.match(/^(\d{1,2})(?::?(\d{1,2}))?(?::?(\d{1,2}))?$/);
   if (!m) return "";
   const H = Math.min(23, Math.max(0, parseInt(m[1] || "0", 10)));
   const M = Math.min(59, Math.max(0, parseInt(m[2] || "0", 10)));
-  const hh = String(H).padStart(2, "0");
-  const mm = String(M).padStart(2, "0");
-  return `${hh}:${mm}`;
+  return `${String(H).padStart(2, "0")}:${String(M).padStart(2, "0")}`;
 };
-
-const hhmm = (s, fallback = "") => parseHora(s) || fallback;
+const hhmm = (s, fb = "") => parseHora(s) || fb;
 
 const isoDay = (v) => {
   if (!v) return "";
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   if (typeof v === "string") return v.slice(0, 10);
-  try {
-    return new Date(v).toISOString().slice(0, 10);
-  } catch {
-    return "";
-  }
+  try { return new Date(v).toISOString().slice(0, 10); } catch { return ""; }
 };
 
-// Aceita "YYYY-MM-DD" ou "DD/MM/YYYY". Retorna "YYYY-MM-DD" ou "".
-const parseDataFlex = (s) => {
-  if (!s) return "";
-  const t = String(s).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
-  const m = t.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (m) {
-    const dd = m[1], mm = m[2], yyyy = m[3];
-    return `${yyyy}-${mm}-${dd}`;
-  }
-  return "";
-};
-
-// soma horas de cada encontro; se >= 8h no dia, desconta 1h (pausa almoço)
 const calcularCargaHorariaTotal = (arr) => {
   let horas = 0;
   for (const e of arr) {
@@ -95,12 +48,10 @@ const calcularCargaHorariaTotal = (arr) => {
   return Math.round(horas);
 };
 
-// Converte initialTurma.datas -> encontros (para edição)
 const datasParaEncontros = (t) => {
   const baseHi = hhmm(t?.horario_inicio, "08:00");
   const baseHf = hhmm(t?.horario_fim, "17:00");
   if (!Array.isArray(t?.datas)) return null;
-
   const arr = t.datas
     .map((d) => ({
       data: isoDay(d?.data),
@@ -108,54 +59,27 @@ const datasParaEncontros = (t) => {
       fim: hhmm(d?.horario_fim, baseHf),
     }))
     .filter((x) => x.data);
-
-  console.log("[datasParaEncontros] t.datas → encontros:", arr);
   return arr.length ? arr : null;
 };
 
 const encontrosDoInitial = (t) => {
-  console.group("[encontrosDoInitial]");
-  console.log("initialTurma recebido:", t);
-
-  if (!t) {
-    console.log("→ fallback encontro vazio");
-    console.groupEnd();
-    return [{ data: "", inicio: "", fim: "" }];
-  }
-
-  // 1) encontros explícitos
+  if (!t) return [{ data: "", inicio: "", fim: "" }];
   if (Array.isArray(t.encontros) && t.encontros.length) {
-    console.log("usando t.encontros");
     const baseHi = hhmm(t?.horario_inicio, "08:00");
     const baseHf = hhmm(t?.horario_fim, "17:00");
-    const arr = t.encontros
+    return t.encontros
       .map((e) => ({
         data: isoDay(e?.data || e),
         inicio: hhmm(e?.inicio, baseHi),
         fim: hhmm(e?.fim, baseHf),
       }))
       .filter((x) => x.data);
-    console.log("→ encontros normalizados:", arr);
-    console.groupEnd();
-    return arr;
   }
-
-  // 2) converte datas -> encontros
-  console.log("tentando converter datas → encontros");
   const conv = datasParaEncontros(t);
-  if (conv) {
-    console.log("→ conversão bem sucedida:", conv);
-    console.groupEnd();
-    return conv;
-  }
-
-  // 3) fallback vazio
-  console.log("→ fallback encontro vazio");
-  console.groupEnd();
+  if (conv) return conv;
   return [{ data: "", inicio: "", fim: "" }];
 };
 
-// true se houver sobreposição (dentro do mesmo dia)
 const temSobreposicao = (encontros) => {
   const byDay = encontros.reduce((acc, e) => {
     const d = isoDay(e.data);
@@ -165,20 +89,13 @@ const temSobreposicao = (encontros) => {
   }, {});
   for (const d of Object.keys(byDay)) {
     const arr = byDay[d]
-      .map((e) => ({
-        ini: hhmm(e.inicio, "00:00"),
-        fim: hhmm(e.fim, "00:00"),
-      }))
+      .map((e) => ({ ini: hhmm(e.inicio, "00:00"), fim: hhmm(e.fim, "00:00") }))
       .sort((a, b) => (a.ini < b.ini ? -1 : a.ini > b.ini ? 1 : 0));
-
-    for (let i = 1; i < arr.length; i++) {
-      if (arr[i].ini < arr[i - 1].fim) return true;
-    }
+    for (let i = 1; i < arr.length; i++) if (arr[i].ini < arr[i - 1].fim) return true;
   }
   return false;
 };
 
-// normaliza + remove duplicados exatos (data+inicio+fim)
 const dedupEncontros = (lista) => {
   const seen = new Set();
   const out = [];
@@ -192,7 +109,6 @@ const dedupEncontros = (lista) => {
 };
 
 /* ===================== Componente ===================== */
-
 export default function ModalTurma({
   isOpen,
   onClose,
@@ -200,46 +116,37 @@ export default function ModalTurma({
   initialTurma = null,
   onExcluir,
 }) {
-  console.log("[ModalTurma render] isOpen:", isOpen, "initialTurma:", initialTurma);
-
   const [nome, setNome] = useState(initialTurma?.nome || "");
   const [vagasTotal, setVagasTotal] = useState(
     initialTurma?.vagas_total != null ? String(initialTurma.vagas_total) : ""
   );
-  // cada encontro no estado: { data:'YYYY-MM-DD', inicio:'HH:MM', fim:'HH:MM' }
   const [encontros, setEncontros] = useState(encontrosDoInitial(initialTurma));
 
-  // ref para autosize do título
+  // 🔒 Bloqueia hotkeys do app/ModalBase de roubarem o foco
+  const stopKeys = {
+    onKeyDown: (e) => e.stopPropagation(),
+    onKeyUp: (e) => e.stopPropagation(),
+  };
+
+  // autosize do título
   const refNome = useRef(null);
   const autosizeNome = () => {
     const el = refNome.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`; // até ~200px (≈ 6-8 linhas)
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   };
 
-  // Reidrata quando abrir/editar
   useEffect(() => {
     if (!isOpen) return;
-    console.group("[ModalTurma useEffect isOpen/initialTurma]");
-    console.log("isOpen:", isOpen, "initialTurma:", initialTurma);
-
     setNome(initialTurma?.nome || "");
     setVagasTotal(
       initialTurma?.vagas_total != null ? String(initialTurma.vagas_total) : ""
     );
-
-    const enc = encontrosDoInitial(initialTurma);
-    console.log("→ encontros reidratados:", enc);
-    setEncontros(enc);
-
-    // garante autosize inicial ao abrir
+    setEncontros(encontrosDoInitial(initialTurma));
     setTimeout(autosizeNome, 0);
-
-    console.groupEnd();
   }, [isOpen, initialTurma]);
 
-  // Ordenados/normalizados
   const encontrosOrdenados = useMemo(() => {
     const norm = [...(encontros || [])]
       .map((e) => ({
@@ -250,10 +157,6 @@ export default function ModalTurma({
       }))
       .filter((e) => e.data)
       .sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0));
-
-    console.log("[encontrosOrdenados useMemo] base encontros:", encontros);
-    console.log("[encontrosOrdenados useMemo] normalizado/ordenado:", norm);
-
     return norm;
   }, [encontros]);
 
@@ -263,123 +166,80 @@ export default function ModalTurma({
     encontrosOrdenados.filter((e) => e.data && e.inicio && e.fim)
   );
 
-  console.log("[MiniStats preview]", {
-    data_inicio,
-    data_fim,
-    qtd_encontros: encontrosOrdenados.length,
-    carga_horaria_preview,
-  });
-
-  /* ===================== CRUD encontros ===================== */
+  /* CRUD encontros */
   const addEncontro = () => {
-    console.group("[addEncontro]");
     const last = encontros[encontros.length - 1] || {};
     setEncontros((prev) => [
       ...prev,
-      {
-        data: "",
-        inicio: hhmm(last.inicio, ""),
-        fim: hhmm(last.fim, ""),
-      },
+      { data: "", inicio: hhmm(last.inicio, ""), fim: hhmm(last.fim, "") },
     ]);
-    console.groupEnd();
   };
-
   const removeEncontro = (idx) => {
-    console.group("[removeEncontro]");
     setEncontros((prev) => {
       if (prev.length <= 1) {
         toast.info("Mantenha pelo menos um encontro.");
-        console.groupEnd();
         return prev;
       }
       return prev.filter((_, i) => i !== idx);
     });
-    console.groupEnd();
   };
-
   const updateEncontro = (idx, field, value) => {
-    console.group("[updateEncontro]");
     setEncontros((prev) => prev.map((e, i) => (i === idx ? { ...e, [field]: value } : e)));
-    console.groupEnd();
   };
 
-  /* ===================== validação e salvar ===================== */
+  /* validação/salvar */
   const validar = () => {
-    console.group("[validar turma]");
-    console.log("estado atual:", { nome, vagasTotal, encontrosOrdenados });
-
     if (!nome.trim()) {
       toast.warning("Informe o nome da turma.");
-      console.groupEnd();
       return false;
     }
     if (nome.length > NOME_TURMA_MAX) {
       toast.error(`O nome da turma não pode exceder ${NOME_TURMA_MAX} caracteres.`);
-      console.groupEnd();
       return false;
     }
-    if (
-      vagasTotal === "" ||
-      Number(vagasTotal) <= 0 ||
-      !Number.isFinite(Number(vagasTotal))
-    ) {
+    if (vagasTotal === "" || Number(vagasTotal) <= 0 || !Number.isFinite(Number(vagasTotal))) {
       toast.warning("Quantidade de vagas deve ser um número maior ou igual a 1.");
-      console.groupEnd();
       return false;
     }
     if (!encontrosOrdenados.length) {
       toast.warning("Inclua pelo menos uma data de encontro.");
-      console.groupEnd();
       return false;
     }
     for (let i = 0; i < encontrosOrdenados.length; i++) {
       const e = encontrosOrdenados[i];
       if (!e.data || !e.inicio || !e.fim) {
         toast.error(`Preencha data e horários do encontro #${i + 1}.`);
-        console.groupEnd();
         return false;
       }
       const [h1, m1] = hhmm(e.inicio, "00:00").split(":").map(Number);
       const [h2, m2] = hhmm(e.fim, "00:00").split(":").map(Number);
       if (h2 * 60 + (m2 || 0) <= h1 * 60 + (m1 || 0)) {
         toast.error(`Horários inválidos no encontro #${i + 1}.`);
-        console.groupEnd();
         return false;
       }
     }
     if (temSobreposicao(encontrosOrdenados)) {
       toast.error("Há encontros sobrepostos no mesmo dia. Ajuste os horários.");
-      console.groupEnd();
       return false;
     }
-
-    console.log("✅ validação OK");
-    console.groupEnd();
     return true;
   };
 
   const montarPayload = () => {
-    console.group("[montarPayload Turma]");
     const carga_horaria = calcularCargaHorariaTotal(encontrosOrdenados);
-
-    // usa defaults amigáveis iguais ao backend (08:00 / 17:00)
     const horario_inicio_base = hhmm(encontrosOrdenados[0]?.inicio, "08:00");
     const horario_fim_base = hhmm(encontrosOrdenados[0]?.fim, "17:00");
-
     const encontrosPayload = encontrosOrdenados.map((e) => ({
       data: e.data,
       inicio: hhmm(e.inicio, horario_inicio_base),
       fim: hhmm(e.fim, horario_fim_base),
     }));
-
     const datasPayload = encontrosOrdenados.map((e) => ({
       data: e.data,
       horario_inicio: hhmm(e.inicio, horario_inicio_base),
       horario_fim: hhmm(e.fim, horario_fim_base),
     }));
-
-    const payload = {
+    return {
       ...(initialTurma?.id ? { id: initialTurma.id } : {}),
       nome: nome.trim(),
       vagas_total: Number(vagasTotal),
@@ -391,30 +251,17 @@ export default function ModalTurma({
       encontros: encontrosPayload,
       datas: datasPayload,
     };
-
-    console.log("payload final (turma):", payload);
-    console.groupEnd();
-    return payload;
   };
 
   const handleSalvar = () => {
-    console.group("[handleSalvar Turma]");
-    if (!validar()) {
-      console.groupEnd();
-      return;
-    }
-
-    const payload = montarPayload();
-    console.log("➡️ Chamando onSalvar(payload):", payload);
-    onSalvar?.(payload);
-
+    if (!validar()) return;
+    onSalvar?.(montarPayload());
     if (!initialTurma) {
       setNome("");
       setVagasTotal("");
       setEncontros([{ data: "", inicio: "", fim: "" }]);
       setTimeout(autosizeNome, 0);
     }
-    console.groupEnd();
   };
 
   /* ===================== render ===================== */
@@ -424,28 +271,20 @@ export default function ModalTurma({
   return (
     <ModalBase
       isOpen={isOpen}
-      onClose={() => {
-        console.log("[ModalTurma] fechar modal turma");
-        onClose();
-      }}
+      onClose={() => onClose()}
       level={1}
       maxWidth="max-w-2xl"
       labelledBy={titleId}
       describedBy={descId}
       className="p-0 overflow-hidden"
     >
-      {/* ⬇️  TUDO dentro de UM ÚNICO WRAPPER  ⬇️ */}
       <div className="flex flex-col max-h-[90vh] bg-white dark:bg-zinc-900">
-        {/* HeaderHero */}
         <header
           className="px-5 py-4 text-white bg-gradient-to-br from-teal-900 via-indigo-800 to-violet-700"
           role="group"
           aria-label="Edição de turma"
         >
-          <h2
-            id={titleId}
-            className="text-xl sm:text-2xl font-extrabold tracking-tight"
-          >
+          <h2 id={titleId} className="text-xl sm:text-2xl font-extrabold tracking-tight">
             {initialTurma ? "Editar Turma" : "Nova Turma"}
           </h2>
           <p id={descId} className="text-white/90 text-sm mt-1">
@@ -475,7 +314,7 @@ export default function ModalTurma({
           </div>
         </section>
 
-        {/* Conteúdo (rolável) */}
+        {/* Conteúdo */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -483,7 +322,7 @@ export default function ModalTurma({
           }}
           className="px-5 pt-4 pb-24 overflow-y-auto max-h-[60vh] bg-white dark:bg-zinc-900"
         >
-          {/* Nome (textarea multiline com autosize e contador) */}
+          {/* Título */}
           <div className="relative mb-4">
             <Type className="absolute left-3 top-3 text-slate-500" size={18} aria-hidden />
             <textarea
@@ -493,10 +332,10 @@ export default function ModalTurma({
               onChange={(e) => {
                 const v = e.target.value.slice(0, NOME_TURMA_MAX);
                 setNome(v);
-                // autosize
                 e.target.style.height = "auto";
                 e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
               }}
+              {...stopKeys}
               placeholder="Nome da turma"
               maxLength={NOME_TURMA_MAX}
               rows={2}
@@ -504,7 +343,6 @@ export default function ModalTurma({
               autoComplete="off"
               aria-describedby="nome-turma-help nome-turma-count"
             />
-            {/* contador */}
             <div
               id="nome-turma-count"
               className={`absolute right-3 top-2 text-xs ${
@@ -530,6 +368,7 @@ export default function ModalTurma({
                     type="date"
                     value={isoDay(e.data)}
                     onChange={(ev) => updateEncontro(idx, "data", ev.target.value)}
+                    {...stopKeys}
                     className="w-full pl-10 py-2 border rounded-xl shadow-sm dark:bg-zinc-900 dark:text-white border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     required
                   />
@@ -541,6 +380,7 @@ export default function ModalTurma({
                     type="time"
                     value={hhmm(e.inicio, "")}
                     onChange={(ev) => updateEncontro(idx, "inicio", ev.target.value)}
+                    {...stopKeys}
                     className="w-full pl-10 py-2 border rounded-xl shadow-sm dark:bg-zinc-900 dark:text-white border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     required
                   />
@@ -553,6 +393,7 @@ export default function ModalTurma({
                       type="time"
                       value={hhmm(e.fim, "")}
                       onChange={(ev) => updateEncontro(idx, "fim", ev.target.value)}
+                      {...stopKeys}
                       className="w-full pl-10 py-2 border rounded-xl shadow-sm dark:bg-zinc-900 dark:text-white border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       required
                     />
@@ -579,6 +420,7 @@ export default function ModalTurma({
                 onClick={addEncontro}
                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-full transition"
                 tabIndex={9 + encontros.length * 3}
+                {...stopKeys}
               >
                 <PlusCircle size={16} />
                 Adicionar data
@@ -594,16 +436,20 @@ export default function ModalTurma({
               type="number"
               value={vagasTotal}
               onChange={(e) => setVagasTotal(e.target.value)}
+              {...stopKeys}
+              onWheel={(e) => e.currentTarget.blur()}
               placeholder="Quantidade de vagas"
               className="w-full pl-10 py-2 border rounded-xl shadow-sm dark:bg-zinc-900 dark:text-white border-slate-300 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               min={1}
               required
               inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="off"
             />
           </div>
         </form>
 
-        {/* Rodapé sticky */}
+        {/* Rodapé */}
         <div className="mt-auto sticky bottom-0 left-0 right-0 bg-white/85 dark:bg-zinc-950/85 backdrop-blur border-t border-slate-200 dark:border-slate-800 px-5 py-3 flex justify-between gap-3">
           <div className="min-w-[1.5rem]">
             {initialTurma?.id && onExcluir ? (
@@ -613,6 +459,7 @@ export default function ModalTurma({
                 onClick={() => onExcluir()}
                 title="Excluir turma"
                 tabIndex={300}
+                {...stopKeys}
               >
                 <Trash2 size={16} />
                 Excluir turma
@@ -626,6 +473,7 @@ export default function ModalTurma({
               className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-700 transition"
               type="button"
               tabIndex={301}
+              {...stopKeys}
             >
               Cancelar
             </button>
@@ -634,13 +482,13 @@ export default function ModalTurma({
               className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition"
               type="button"
               tabIndex={302}
+              {...stopKeys}
             >
               Salvar Turma
             </button>
           </div>
         </div>
       </div>
-      {/* ⬆️  FIM do wrapper único  ⬆️ */}
     </ModalBase>
   );
 }
