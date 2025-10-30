@@ -101,7 +101,7 @@ export default function HomeEscola() {
               <p>👉 Venha participar, trazer sua experiência e fortalecer ainda mais a nossa rede de cuidado.</p>
               <p>
                 <strong className="text-red-600 dark:text-red-400 font-bold">
-                  Inscrições serão abertas em breve!
+                  INSCRIÇÕES ABERTAS !!!
                 </strong>
               </p>
               <p>Porque o SUS se constrói todos os dias, com a contribuição de cada trabalhadora e trabalhador da saúde.</p>
