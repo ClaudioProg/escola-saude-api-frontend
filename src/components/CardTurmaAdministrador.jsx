@@ -1,21 +1,42 @@
-// 📁 src/components/CardTurmaadministrador.jsx
+// ✅ src/components/CardTurmaAdministrador.jsx — UNIFICADO (date-only safe + status por data/hora + assinante + ocupação)
 import PropTypes from "prop-types";
 import { motion } from "framer-motion";
 import { CalendarDays, Clock } from "lucide-react";
 
+import BadgeStatus from "./BadgeStatus";
 import BotaoPrimario from "./BotaoPrimario";
 import BotaoSecundario from "./BotaoSecundario";
-import BadgeStatus from "./BadgeStatus";
-import { formatarDataBrasileira } from "../utils/data";
+import { formatarDataBrasileira } from "../utils/dateTime";
 
 /* ================================ Helpers ================================ */
-function sanitizeHHmm(v, fallback = "00:00") {
+
+function isISODateOnly(s) {
+  return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+function pickYMD(isoLike) {
+  if (!isoLike) return null;
+  const s = String(isoLike);
+  const ymd = s.includes("T") ? s.split("T")[0] : s;
+  return isISODateOnly(ymd) ? ymd : null;
+}
+
+// "hoje" em YYYY-MM-DD (local) — evita timezone shift
+function toLocalYMD(d = new Date()) {
+  const dt = d instanceof Date ? d : new Date(d);
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const day = String(dt.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function sanitizeHHmm(v, fallback = null) {
   if (!v) return fallback;
   const s = String(v).slice(0, 5);
   return /^\d{2}:\d{2}$/.test(s) ? s : fallback;
 }
 
-function toDate(dateISO, timeHHmm = "00:00") {
+function toDateLocal(dateISO, timeHHmm = "00:00") {
   if (!dateISO) return null;
   const t = sanitizeHHmm(timeHHmm, "00:00");
   // "YYYY-MM-DDTHH:mm:SS" (sem timezone) → interpretada no fuso local
@@ -26,16 +47,43 @@ function isInvalidDate(d) {
   return !(d instanceof Date) || Number.isNaN(d.getTime());
 }
 
-function getStatusByDateTime({ inicioISO, fimISO, hIni, hFim, agora }) {
-  const start = toDate(inicioISO, hIni || "00:00");
-  const end   = toDate(fimISO,   hFim || "23:59");
+function getStatusKey({
+  inicioISO,
+  fimISO,
+  hIni,
+  hFim,
+  hojeISO,
+}) {
+  // Se tiver horário, calcula por DateTime (mais correto)
+  if (hIni || hFim) {
+    const start = toDateLocal(inicioISO, hIni || "00:00");
+    const end = toDateLocal(fimISO, hFim || "23:59");
+    if (isInvalidDate(start) || isInvalidDate(end)) return "desconhecido";
 
-  if (isInvalidDate(start) || isInvalidDate(end)) return "desconhecido";
-  const now = agora ?? new Date();
+    const now = hojeISO
+      ? new Date(`${hojeISO}T${new Date().toTimeString().slice(0, 8)}`)
+      : new Date();
 
-  if (now < start) return "programado";
-  if (now > end) return "encerrado";
-  return "em_andamento"; // ✅ compatível com <BadgeStatus />
+    if (now < start) return "programado";
+    if (now > end) return "encerrado";
+    return "em_andamento";
+  }
+
+  // Fallback date-only (lexicográfico funciona pra YYYY-MM-DD)
+  const hojeYMD = hojeISO || toLocalYMD();
+  if (!inicioISO || !fimISO) return "desconhecido";
+  if (fimISO < inicioISO) return "desconhecido";
+  if (hojeYMD < inicioISO) return "programado";
+  if (hojeYMD > fimISO) return "encerrado";
+  return "em_andamento";
+}
+
+function periodoTexto(inicioISO, fimISO) {
+  if (inicioISO && fimISO) {
+    return `${formatarDataBrasileira(inicioISO)} a ${formatarDataBrasileira(fimISO)}`;
+  }
+  if (inicioISO) return formatarDataBrasileira(inicioISO);
+  return "Datas a definir";
 }
 
 function clamp(n, mi, ma) {
@@ -53,13 +101,11 @@ function resolveAssinanteNome(turma) {
   // 1) Compat legado
   if (turma?.assinante_nome) return turma.assinante_nome;
 
-  // 2) Novo campo oficial
-  const assinanteId = Number(
-    turma?.instrutor_assinante_id ?? turma?.assinante_id /* fallback legado */
-  );
+  // 2) Campo id
+  const assinanteId = Number(turma?.instrutor_assinante_id ?? turma?.assinante_id);
   if (!Number.isFinite(assinanteId)) return null;
 
-  // 3) Procurar entre os instrutores da turma
+  // 3) Procurar entre instrutores da turma
   const arr = Array.isArray(turma?.instrutores) ? turma.instrutores : [];
   for (const it of arr) {
     const id = Number(typeof it === "object" ? it.id : it);
@@ -70,14 +116,15 @@ function resolveAssinanteNome(turma) {
 }
 
 /* ================================ Componente ================================ */
-export default function CardTurmaadministrador({
+
+export default function CardTurmaAdmin({
   turma,
   inscritos = [],
   hojeISO,
   estaExpandida = false,
-  modoadministradorPresencas = false,
+  modoAdminPresencas = false,
   carregarInscritos,
-  carregarAvaliacoes,
+  carregarAvaliacao,
   carregarPresencas,
   gerarRelatorioPDF,
   navigate,
@@ -86,26 +133,26 @@ export default function CardTurmaadministrador({
 }) {
   if (!turma) return null;
 
-  // Datas em ISO — usamos só AAAA-MM-DD
-  const inicioISO = turma?.data_inicio?.split("T")[0] || turma?.data_inicio || null;
-  const fimISO    = turma?.data_fim?.split("T")[0]    || turma?.data_fim    || null;
+  const inicioISO = pickYMD(turma?.data_inicio) ?? null;
+  const fimISO = pickYMD(turma?.data_fim) ?? (inicioISO ?? null);
 
   const hIni = sanitizeHHmm(turma?.horario_inicio || null, null);
   const hFim = sanitizeHHmm(turma?.horario_fim || null, null);
 
-  // "agora" baseado em hojeISO para previsibilidade (tests/SSR)
-  const agora = hojeISO
-    ? new Date(`${hojeISO}T${new Date().toTimeString().slice(0, 8)}`)
-    : new Date();
-
-  const statusKey = getStatusByDateTime({ inicioISO, fimISO, hIni, hFim, agora });
+  const statusKey = getStatusKey({ inicioISO, fimISO, hIni, hFim, hojeISO });
   const eventoJaIniciado = statusKey === "em_andamento" || statusKey === "encerrado";
-  const dentroDoPeriodo  = statusKey === "em_andamento";
+  const dentroDoPeriodo = statusKey === "em_andamento";
 
-  // Ocupação
-  const vagasTotais  = clamp(turma?.vagas_totais ?? turma?.vagas_total ?? turma?.vagas ?? turma?.capacidade ?? 0, 0, 10**9);
+  const ir = (path) => typeof navigate === "function" && path && navigate(path);
+
+  // Ocupação (se houver)
+  const vagasTotais = clamp(
+    turma?.vagas_total ?? turma?.vagas_totais ?? turma?.vagas ?? turma?.capacidade ?? 0,
+    0,
+    10 ** 9
+  );
   const qtdInscritos = Array.isArray(inscritos) ? inscritos.length : 0;
-  const pct          = vagasTotais > 0 ? clamp(Math.round((qtdInscritos / vagasTotais) * 100), 0, 100) : 0;
+  const pct = vagasTotais > 0 ? clamp(Math.round((qtdInscritos / vagasTotais) * 100), 0, 100) : 0;
 
   const badgePct =
     pct >= 100
@@ -114,20 +161,16 @@ export default function CardTurmaadministrador({
       ? "bg-amber-100 text-amber-900 border-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-800/60"
       : "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-800/60";
 
-  const barPct =
-    pct >= 100 ? "bg-red-600" : pct >= 75 ? "bg-orange-500" : "bg-green-600";
+  const barPct = pct >= 100 ? "bg-red-600" : pct >= 75 ? "bg-orange-500" : "bg-green-600";
 
   // Carga horária (opcional)
-  const cargaDia   = turma?.carga_horaria_dia ?? turma?.carga_horaria_diaria ?? turma?.carga_diaria ?? null;
-  const cargaTotal = turma?.carga_horaria_total ?? turma?.carga_total ?? null;
+  const cargaDia = turma?.carga_horaria_dia ?? turma?.carga_horaria_diaria ?? turma?.carga_diaria ?? null;
+  const cargaTotal = turma?.carga_horaria_total ?? turma?.carga_total ?? turma?.carga_horaria ?? null;
+
+  const assinanteNome = resolveAssinanteNome(turma);
 
   const tituloId = `turma-${turma?.id}-titulo`;
   const periodoId = `turma-${turma?.id}-periodo`;
-
-  const ir = (path) => typeof navigate === "function" && path && navigate(path);
-
-  // 🆕 assinante da turma (nome já resolvido)
-  const assinanteNome = resolveAssinanteNome(turma);
 
   return (
     <motion.div
@@ -156,9 +199,7 @@ export default function CardTurmaadministrador({
           <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
             <span id={periodoId} className="inline-flex items-center gap-1.5">
               <CalendarDays size={16} aria-hidden="true" />
-              {inicioISO && fimISO
-                ? `${formatarDataBrasileira(inicioISO)} a ${formatarDataBrasileira(fimISO)}`
-                : "Datas a definir"}
+              {periodoTexto(inicioISO, fimISO)}
             </span>
 
             {(hIni || hFim) && (
@@ -177,9 +218,11 @@ export default function CardTurmaadministrador({
             </div>
           )}
 
-          {/* Tag do Assinante da Turma */}
+          {/* Assinante */}
           <div className="mt-1 text-[13px]">
-            <span className="font-semibold text-zinc-700 dark:text-zinc-200 mr-1.5">Assinante:</span>
+            <span className="font-semibold text-zinc-700 dark:text-zinc-200 mr-1.5">
+              Assinante:
+            </span>
             <span
               className="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-200 dark:border-emerald-800"
               title={assinanteNome || "—"}
@@ -196,11 +239,12 @@ export default function CardTurmaadministrador({
       {vagasTotais > 0 && (
         <div className="mt-2" aria-label="Progresso de ocupação de vagas">
           <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300 mb-1">
-            <span>{qtdInscritos} de {vagasTotais} vagas preenchidas</span>
-            <span className={`px-2 py-0.5 rounded-full border ${badgePct}`}>
-              {pct}%
+            <span>
+              {qtdInscritos} de {vagasTotais} vagas preenchidas
             </span>
+            <span className={`px-2 py-0.5 rounded-full border ${badgePct}`}>{pct}%</span>
           </div>
+
           <div
             className="h-2 rounded-full bg-gray-200 dark:bg-zinc-700 overflow-hidden"
             role="progressbar"
@@ -214,9 +258,9 @@ export default function CardTurmaadministrador({
         </div>
       )}
 
-      {/* Ações — escondidas quando somenteInfo=true */}
+      {/* Ações */}
       {!somenteInfo && (
-        !modoadministradorPresencas ? (
+        !modoAdminPresencas ? (
           <div className="flex flex-wrap gap-2 mt-3">
             <BotaoSecundario
               onClick={() => carregarInscritos?.(turma?.id)}
@@ -229,7 +273,7 @@ export default function CardTurmaadministrador({
             </BotaoSecundario>
 
             <BotaoSecundario
-              onClick={() => carregarAvaliacoes?.(turma?.id)}
+              onClick={() => carregarAvaliacao?.(turma?.id)}
               aria-label="Abrir avaliações da turma"
               title="Avaliações"
               variant="outline"
@@ -244,7 +288,6 @@ export default function CardTurmaadministrador({
                 aria-label="Abrir leitor de QR Code para presença"
                 title="Registro de presença por QR Code"
                 cor="verde"
-                className="bg-gradient-to-br from-[#0f2c1f] via-[#114b2d] to-[#166534] hover:brightness-[1.05]"
               >
                 📷 QR Code
               </BotaoPrimario>
@@ -290,14 +333,13 @@ export default function CardTurmaadministrador({
                 onExpandirOuRecolher?.(turma.id);
                 if (!estaExpandida) {
                   carregarInscritos?.(turma.id);
-                  carregarAvaliacoes?.(turma.id);
+                  carregarAvaliacao?.(turma.id);
                   carregarPresencas?.(turma.id);
                 }
               }}
               aria-label={estaExpandida ? "Recolher detalhes da turma" : "Ver detalhes da turma"}
               rightIcon={<span aria-hidden>{estaExpandida ? "▴" : "▾"}</span>}
               cor="azulPetroleo"
-              className="bg-gradient-to-br from-slate-900 via-teal-900 to-slate-800 hover:brightness-[1.05]"
             >
               {estaExpandida ? "Recolher Detalhes" : "Ver Detalhes"}
             </BotaoPrimario>
@@ -308,17 +350,38 @@ export default function CardTurmaadministrador({
   );
 }
 
-CardTurmaadministrador.propTypes = {
-  turma: PropTypes.object.isRequired,
+CardTurmaAdmin.propTypes = {
+  turma: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    nome: PropTypes.string,
+    data_inicio: PropTypes.string,
+    data_fim: PropTypes.string,
+    horario_inicio: PropTypes.string,
+    horario_fim: PropTypes.string,
+    vagas_total: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    instrutor_assinante_id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    assinante_id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    assinante_nome: PropTypes.string,
+    instrutor_assinante: PropTypes.shape({ nome: PropTypes.string }),
+    instrutores: PropTypes.array,
+    carga_horaria: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    carga_total: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    carga_horaria_total: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    carga_diaria: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    carga_horaria_dia: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  }).isRequired,
+
   inscritos: PropTypes.array,
-  hojeISO: PropTypes.string,
+  hojeISO: PropTypes.string, // YYYY-MM-DD
   estaExpandida: PropTypes.bool,
-  modoadministradorPresencas: PropTypes.bool,
+  modoAdminPresencas: PropTypes.bool,
+
   carregarInscritos: PropTypes.func,
-  carregarAvaliacoes: PropTypes.func,
+  carregarAvaliacao: PropTypes.func,
   carregarPresencas: PropTypes.func,
   gerarRelatorioPDF: PropTypes.func,
   navigate: PropTypes.func,
   onExpandirOuRecolher: PropTypes.func,
+
   somenteInfo: PropTypes.bool,
 };

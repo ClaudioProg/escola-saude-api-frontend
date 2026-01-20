@@ -1,4 +1,4 @@
-// ✅ src/pages/AvaliadorSubmissoes.jsx — premium++ (a11y, CSV, atalhos, bugfix nota + fallback 404)
+// ✅ src/pages/Avaliadorsubmissao.jsx — premium++ (a11y, CSV, atalhos, bugfix nota + fallback 404)
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -18,7 +18,7 @@ import Footer from "../components/Footer";
 import { useOnceEffect } from "../hooks/useOnceEffect";
 import {
   listarTrabalhosAtribuidosAoAvaliador,
-} from "../services/submissoesAvaliadores";
+} from "../services/submissaoAvaliadores";
 
 /* ───────────── utils ───────────── */
 const fmt = (v, alt = "—") => (v === 0 || !!v ? String(v) : alt);
@@ -130,7 +130,7 @@ function CardSubmissao({ item, notaW, notaO, showEscrita, showOral, onAbrir }) {
 }
 
 /* ───────────── Tabela (desktop) ───────────── */
-function TabelaSubmissoes({ itens, notasMap, onAbrir, variant = "pending" }) {
+function Tabelasubmissao({ itens, notasMap, onAbrir, variant = "pending" }) {
   const headClass =
     variant === "pending" ? "bg-emerald-700 text-white" : "bg-amber-600 text-white";
 
@@ -226,8 +226,8 @@ function DrawerAvaliacao({ open, onClose, submissaoId, tipo }) {
         setLoading(true);
         const url =
           tipo === "oral"
-            ? `/avaliador/submissoes/${submissaoId}?tipo=oral`
-            : `/avaliador/submissoes/${submissaoId}`;
+            ? `/avaliador/submissao/${submissaoId}?tipo=oral`
+            : `/avaliador/submissao/${submissaoId}`;
 
         const r = await api.get(url, { signal: ac.signal });
         const data = r?.data ?? r;
@@ -265,8 +265,8 @@ function DrawerAvaliacao({ open, onClose, submissaoId, tipo }) {
 
       const url =
         tipo === "oral"
-          ? `/avaliador/submissoes/${submissaoId}/avaliar-oral`
-          : `/avaliador/submissoes/${submissaoId}/avaliar`;
+          ? `/avaliador/submissao/${submissaoId}/avaliar-oral`
+          : `/avaliador/submissao/${submissaoId}/avaliar`;
 
       await api.post(url, payload);
       onClose?.({ saved: true, tipo });
@@ -327,7 +327,7 @@ function DrawerAvaliacao({ open, onClose, submissaoId, tipo }) {
                 ["Objetivos", meta?.objetivos],
                 ["Método", meta?.metodo],
                 ["Resultados", meta?.resultados],
-                ["Considerações Finais", meta?.consideracoes],
+                ["Considerações Finais", meta?.consideracao],
                 ["Bibliografia", meta?.bibliografia],
               ].map(([label, value]) => (
                 <div key={label} className="bg-zinc-50 dark:bg-zinc-800/40 rounded-xl p-4">
@@ -415,7 +415,7 @@ function DrawerAvaliacao({ open, onClose, submissaoId, tipo }) {
 }
 
 /* ───────────── Página principal ───────────── */
-export default function AvaliadorSubmissoes() {
+export default function Avaliadorsubmissao() {
   const [loading, setLoading] = useState(true);
   const [lista, setLista] = useState([]);          // lista crua (uma linha por atribuição)
   const [busca, setBusca] = useState("");
@@ -467,7 +467,7 @@ export default function AvaliadorSubmissoes() {
     try {
       setLoading(true);
 
-      // 1) lista usando serviço com fallback (evita 404 no /avaliador/submissoes)
+      // 1) lista usando serviço com fallback (evita 404 no /avaliador/submissao)
       const arr = await listarTrabalhosAtribuidosAoAvaliador().catch(() => []);
       setLista(Array.isArray(arr) ? arr : []);
 
@@ -500,7 +500,7 @@ export default function AvaliadorSubmissoes() {
       async function pegarNotaParaLinha(s) {
         try {
           const tipo = String(s.tipo || "escrita").toLowerCase();
-          const url = tipo === "oral" ? `/avaliador/submissoes/${s.id}?tipo=oral` : `/avaliador/submissoes/${s.id}`;
+          const url = tipo === "oral" ? `/avaliador/submissao/${s.id}?tipo=oral` : `/avaliador/submissao/${s.id}`;
           const det = await api.get(url, { signal: ac.signal });
           const d = det?.data ?? det;
           const criterios = d?.criterios || [];
@@ -548,7 +548,7 @@ export default function AvaliadorSubmissoes() {
   const pendentes = useMemo(() => filtradas.filter((s) => !s.ja_avaliado), [filtradas]);
   const realizadas = useMemo(() => filtradas.filter((s) => s.ja_avaliado), [filtradas]);
 
-  const totalSubmissoes = contagens.total != null ? contagens.total : (lista || []).length;
+  const totalsubmissao = contagens.total != null ? contagens.total : (lista || []).length;
   const totalPendentes = contagens.pendentes != null ? contagens.pendentes : pendentes.length;
   const totalAvaliadas = contagens.avaliados != null ? contagens.avaliados : realizadas.length;
 
@@ -592,7 +592,7 @@ export default function AvaliadorSubmissoes() {
         w, o
       ].join(";"));
     }
-    baixarArquivo(`submissoes_${escopo}.csv`, linhas.join("\r\n"), "text/csv;charset=utf-8");
+    baixarArquivo(`submissao_${escopo}.csv`, linhas.join("\r\n"), "text/csv;charset=utf-8");
   }
 
   if (loading) {
@@ -670,7 +670,7 @@ export default function AvaliadorSubmissoes() {
         <section className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-4 gap-4 2xl:gap-6">
           <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 shadow-sm">
             <p className="text-[11px] uppercase text-zinc-500 dark:text-zinc-400 font-medium">Total recebidos</p>
-            <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">{totalSubmissoes}</p>
+            <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">{totalsubmissao}</p>
           </div>
           <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 shadow-sm">
             <p className="text-[11px] uppercase text-zinc-500 dark:text-zinc-400 font-medium">Pendentes p/ você</p>
@@ -712,7 +712,7 @@ export default function AvaliadorSubmissoes() {
           <h3 className="text-lg font-bold text-zinc-800 dark:text-zinc-100">Avaliações pendentes ({pendentes.length})</h3>
 
           {/* Desktop */}
-          <TabelaSubmissoes
+          <Tabelasubmissao
             variant="pending"
             itens={pendentes}
             notasMap={notasMap}
@@ -756,7 +756,7 @@ export default function AvaliadorSubmissoes() {
           <h3 className="text-lg font-bold text-zinc-800 dark:text-zinc-100">Avaliações realizadas ({realizadas.length})</h3>
 
           {/* Desktop */}
-          <TabelaSubmissoes
+          <Tabelasubmissao
             variant="done"
             itens={realizadas}
             notasMap={notasMap}
@@ -813,8 +813,8 @@ export default function AvaliadorSubmissoes() {
                   // Recalcula nota normalizada usando a API da própria submissão
                   const t = ev.tipo || focus.tipo || "escrita";
                   const url = t === "oral"
-                    ? `/avaliador/submissoes/${focus.id}?tipo=oral`
-                    : `/avaliador/submissoes/${focus.id}`;
+                    ? `/avaliador/submissao/${focus.id}?tipo=oral`
+                    : `/avaliador/submissao/${focus.id}`;
                   const det = await api.get(url);
                   const d = det?.data ?? det;
                   const criterios = d?.criterios || [];

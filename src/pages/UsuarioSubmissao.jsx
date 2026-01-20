@@ -1,4 +1,4 @@
-// ✅ src/pages/UsuarioSubmissoes.jsx — premium/robusto (rotas públicas p/ modelos + ModalConfirmacao)
+// ✅ src/pages/Usuariosubmissao.jsx — premium/robusto (rotas públicas p/ modelos + ModalConfirmacao)
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { toast } from "react-toastify";
@@ -134,7 +134,7 @@ function StatusChip({ status }) {
   );
 }
 
-function AprovacoesSection({ subm }) {
+function AprovacaoSection({ subm }) {
   const st = String(subm?.status || "").toLowerCase();
   const expoOk = okEscrita(subm);
   const oralOk = okOral(subm);
@@ -223,7 +223,7 @@ function PosterCell({ id, nome }) {
   const baixar = async () => {
     try {
       setDownloading(true);
-      const { blob, filename } = await apiGetFile(`/submissoes/${id}/poster`);
+      const { blob, filename } = await apiGetFile(`/submissao/${id}/poster`);
       downloadBlob(filename || safeNome, blob);
       toast.success("Download iniciado.");
     } catch (e) {
@@ -284,7 +284,7 @@ function SubmissionCard({
           </div>
         </div>
 
-        <AprovacoesSection subm={subm} />
+        <AprovacaoSection subm={subm} />
 
         {oralAprovada && (
           <div className="text-sm">
@@ -403,7 +403,7 @@ function RegrasEDicasSection() {
               <strong>Clareza e objetividade</strong> na apresentação (oral e visual).
             </li>
             <li>
-              <strong>Coesão</strong> da apresentação com o trabalho escrito submetido.
+              <strong>caoão</strong> da apresentação com o trabalho escrito submetido.
             </li>
             <li>
               <strong>Aproveitamento e respeito ao tempo</strong> de apresentação.
@@ -455,7 +455,7 @@ function RegrasEDicasSection() {
 const BLOQUEADOS = new Set(["em_avaliacao", "aprovado_exposicao", "aprovado_oral", "aprovado_escrita", "reprovado"]);
 
 /* ───────────────── Página principal ───────────────── */
-export default function UsuarioSubmissoes() {
+export default function Usuariosubmissao() {
   const mountedRef = useRef(true);
 
   const [loading, setLoading] = useState(true);
@@ -563,7 +563,7 @@ export default function UsuarioSubmissoes() {
     async ({ silent = false } = {}) => {
       if (!silent) setLoading(true);
       try {
-        const [c, s] = await Promise.all([api.get("/chamadas/ativas"), api.get("/submissoes/minhas")]);
+        const [c, s] = await Promise.all([api.get("/chamadas/ativas"), api.get("/submissao/minhas")]);
 
         const chamadasArr = unwrap(c);
         const minhasArr = unwrap(s);
@@ -617,7 +617,7 @@ export default function UsuarioSubmissoes() {
   /* ───── recarregar submissões após salvar/editar ───── */
   const handleSucesso = useCallback(async () => {
     try {
-      const s = await api.get("/submissoes/minhas");
+      const s = await api.get("/submissao/minhas");
       const minhasArr = unwrap(s);
       safeSet(() => setMinhas(minhasArr));
     } catch {
@@ -664,8 +664,8 @@ export default function UsuarioSubmissoes() {
     if (!confirmacao?.id) return;
     try {
       setExcluindoId(confirmacao.id);
-      if (typeof api.delete === "function") await api.delete(`/submissoes/${confirmacao.id}`);
-      else await api({ method: "DELETE", url: `/submissoes/${confirmacao.id}` });
+      if (typeof api.delete === "function") await api.delete(`/submissao/${confirmacao.id}`);
+      else await api({ method: "DELETE", url: `/submissao/${confirmacao.id}` });
       await handleSucesso();
       toast.success("Submissão excluída com sucesso.");
     } catch (e) {
@@ -892,10 +892,10 @@ export default function UsuarioSubmissoes() {
           </section>
 
           {/* ───── Minhas submissões ───── */}
-          <section aria-labelledby="minhas-submissoes">
+          <section aria-labelledby="minhas-submissao">
             <div className="flex items-center justify-center gap-2 mb-2">
               <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />
-              <h2 id="minhas-submissoes" className="text-base sm:text-lg font-bold text-center text-zinc-900 dark:text-zinc-50">
+              <h2 id="minhas-submissao" className="text-base sm:text-lg font-bold text-center text-zinc-900 dark:text-zinc-50">
                 Minhas submissões
               </h2>
             </div>

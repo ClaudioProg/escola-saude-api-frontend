@@ -1,4 +1,4 @@
-// 📄 src/pages/CancelarInscricoesAdmin.jsx — versão premium
+// 📄 src/pages/CancelarInscricaoAdmin.jsx — versão premium
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { toast } from "react-toastify";
 import { apiGet, apiDelete } from "../services/api";
@@ -187,7 +187,7 @@ async function fetchTurmasDoEvento(eventoId) {
 }
 
 /* ───────────────── Página ───────────────── */
-export default function CancelarInscricoesAdmin() {
+export default function CancelarInscricaoAdmin() {
   const [eventos, setEventos] = useState([]);
   const [loadingEventos, setLoadingEventos] = useState(true);
 
@@ -293,9 +293,9 @@ export default function CancelarInscricoesAdmin() {
       setLive(`Carregando inscritos da turma ${turmaId}…`);
 
       const rotas = [
-        `/api/inscricoes/turma/${turmaId}`,
-        `/api/turmas/${turmaId}/inscricoes`,
-        `/api/inscricoes?turma_id=${turmaId}`,
+        `/api/inscricao/turma/${turmaId}`,
+        `/api/turmas/${turmaId}/inscricao`,
+        `/api/inscricao?turma_id=${turmaId}`,
       ];
 
       let inscritos = [];
@@ -370,7 +370,7 @@ export default function CancelarInscricoesAdmin() {
 
     try {
       for (const uid of usuarioIds) {
-        await apiDelete(`/api/inscricoes/${turmaId}/usuario/${uid}`);
+        await apiDelete(`/api/inscricao/${turmaId}/usuario/${uid}`);
       }
       toast.success(usuarioIds.length > 1 ? "Inscrições canceladas." : "Inscrição cancelada.");
       setLive("Cancelamento concluído.");

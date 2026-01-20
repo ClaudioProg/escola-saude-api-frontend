@@ -1,4 +1,4 @@
-// ✅ src/pages/Notificacoes.jsx (premium + mobile-first + a11y + anti-fuso + filtros + paginação)
+// ✅ src/pages/Notificacao.jsx (premium + mobile-first + a11y + anti-fuso + filtros + paginação)
 // - ✅ Mantém seu HeaderHero (3 cores) e melhora UX
 // - ✅ Adiciona: busca, filtro por tipo, “somente não lidas”, ordenação, paginação client-side
 // - ✅ Anti-fuso: não usa Date para "YYYY-MM-DD"; para datetime tenta parse seguro; fallback mantém texto
@@ -205,8 +205,8 @@ async function runLimited(tasks, limit = 6) {
 /* =======================
    Página
    ======================= */
-export default function Notificacoes() {
-  const [notificacoes, setNotificacoes] = useState([]);
+export default function Notificacao() {
+  const [notificacao, setNotificacao] = useState([]);
   const [loading, setLoading] = useState(true);
   const [marcando, setMarcando] = useState(null);
   const [marcandoTodas, setMarcandoTodas] = useState(false);
@@ -224,18 +224,18 @@ export default function Notificacoes() {
     if (liveRef.current) liveRef.current.textContent = msg;
   }, []);
 
-  async function carregarNotificacoes(signal) {
+  async function carregarNotificacao(signal) {
     try {
       setLoading(true);
       setLive("Carregando notificações…");
-      const data = await apiGet("/api/notificacoes", { signal });
-      setNotificacoes(Array.isArray(data) ? data : []);
+      const data = await apiGet("/api/notificacao", { signal });
+      setNotificacao(Array.isArray(data) ? data : []);
       setLive("Notificações carregadas.");
     } catch (error) {
       if (error?.name !== "AbortError") {
         toast.error("❌ Erro ao carregar notificações.");
         console.error("Erro:", error);
-        setNotificacoes([]);
+        setNotificacao([]);
         setLive("Falha ao carregar notificações.");
       }
     } finally {
@@ -246,23 +246,23 @@ export default function Notificacoes() {
   // ✅ evita duplo carregamento (StrictMode)
   useOnceEffect(() => {
     const ac = new AbortController();
-    carregarNotificacoes(ac.signal);
+    carregarNotificacao(ac.signal);
     return () => ac.abort();
   }, []);
 
   async function handleMarcarLida(id, link) {
     try {
       setMarcando(id);
-      await apiPatch(`/api/notificacoes/${id}/lida`);
+      await apiPatch(`/api/notificacao/${id}/lida`);
 
-      setNotificacoes((prev) =>
+      setNotificacao((prev) =>
         prev.map((n) =>
           n.id === id ? { ...n, lida: true, lido: true, lida_em: n.lida_em ?? new Date().toISOString() } : n
         )
       );
 
-      if (typeof window.atualizarContadorNotificacoes === "function") {
-        window.atualizarContadorNotificacoes();
+      if (typeof window.atualizarContadorNotificacao === "function") {
+        window.atualizarContadorNotificacao();
       }
 
       if (link) window.location.href = link;
@@ -275,21 +275,21 @@ export default function Notificacoes() {
   }
 
   async function marcarTodas() {
-    const ids = notificacoes.filter(isNaoLida).map((n) => n.id).filter(Boolean);
+    const ids = notificacao.filter(isNaoLida).map((n) => n.id).filter(Boolean);
     if (!ids.length) return;
 
     try {
       setMarcandoTodas(true);
 
       // 🔥 mais rápido e mais "seguro" p/ API: concorrência limitada
-      const tasks = ids.map((id) => () => apiPatch(`/api/notificacoes/${id}/lida`));
+      const tasks = ids.map((id) => () => apiPatch(`/api/notificacao/${id}/lida`));
       const results = await runLimited(tasks, 6);
 
       const falhas = results.filter((r) => r instanceof Error).length;
       if (falhas) toast.warn(`⚠️ ${falhas} notificação(ões) não puderam ser marcadas agora.`);
       toast.success("✅ Notificações marcadas como lidas.");
 
-      setNotificacoes((prev) =>
+      setNotificacao((prev) =>
         prev.map((n) => ({
           ...n,
           lida: true,
@@ -298,8 +298,8 @@ export default function Notificacoes() {
         }))
       );
 
-      if (typeof window.atualizarContadorNotificacoes === "function") {
-        window.atualizarContadorNotificacoes();
+      if (typeof window.atualizarContadorNotificacao === "function") {
+        window.atualizarContadorNotificacao();
       }
     } finally {
       setMarcandoTodas(false);
@@ -308,12 +308,12 @@ export default function Notificacoes() {
 
   // lista “base” (unread primeiro + data desc)
   const listaOrdenadaBase = useMemo(() => {
-    return [...notificacoes].sort((a, b) => {
+    return [...notificacao].sort((a, b) => {
       const unreadDelta = (isNaoLida(b) ? 1 : 0) - (isNaoLida(a) ? 1 : 0);
       if (unreadDelta !== 0) return unreadDelta;
       return getDataMs(b) - getDataMs(a);
     });
-  }, [notificacoes]);
+  }, [notificacao]);
 
   const total = listaOrdenadaBase.length;
   const naoLidas = useMemo(() => listaOrdenadaBase.filter(isNaoLida).length, [listaOrdenadaBase]);

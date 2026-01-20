@@ -1,10 +1,10 @@
-// 📁 src/components/CardEventoadministrador.jsx
+// 📁 src/components/CardEventoAdministrador.jsx
 import PropTypes from "prop-types";
 import { useEffect, useMemo } from "react";
 import { CalendarDays, FileDown, Eye, Ear, Accessibility } from "lucide-react";
 import BadgeStatus from "./BadgeStatus";
-import CardTurmaadministrador from "./CardTurmaadministrador";
-import { idadeDe } from "../utils/data";
+import CardTurmaAdministrador from "./CardTurmaAdministrador";
+import { idadeDe } from "../utils/dateTime";
 
 /* ========================= Helpers ========================= */
 const isDateOnly = (str) => typeof str === "string" && /^\d{4}-\d{2}-\d{2}$/.test(str);
@@ -277,15 +277,15 @@ function resolverInstrutoresTurma(turma) {
 }
 
 /* ========================= Componente ========================= */
-export default function CardEventoadministrador({
+export default function CardEventoAdministrador({
   evento,
   expandido,
   toggleExpandir,
   turmas,
   carregarInscritos,
   inscritosPorTurma,
-  carregarAvaliacoes,
-  avaliacoesPorTurma,
+  carregarAvaliacao,
+  avaliacaoPorTurma,
   presencasPorTurma,
   carregarPresencas,
   gerarRelatorioPDF,
@@ -322,7 +322,7 @@ export default function CardEventoadministrador({
     for (const turma of turmas) {
       if (!inscritosPorTurma?.[turma.id]) carregarInscritos?.(turma.id);
       if (!presencasPorTurma?.[turma.id]) carregarPresencas?.(turma.id);
-      if (!avaliacoesPorTurma?.[turma.id]) carregarAvaliacoes?.(turma.id);
+      if (!avaliacaoPorTurma?.[turma.id]) carregarAvaliacao?.(turma.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandido, turmas]);
@@ -425,11 +425,11 @@ export default function CardEventoadministrador({
                 return (
                   <div key={turma.id} className="space-y-3">
                     {/* Cabeçalho da turma */}
-                    <CardTurmaadministrador
+                    <CardTurmaAdministrador
                       turma={turma}
                       inscritos={inscritos}
                       carregarInscritos={carregarInscritos}
-                      carregarAvaliacoes={carregarAvaliacoes}
+                      carregarAvaliacao={carregarAvaliacao}
                       carregarPresencas={carregarPresencas}
                       gerarRelatorioPDF={gerarRelatorioPDF}
                       somenteInfo
@@ -641,15 +641,15 @@ StatCard.propTypes = {
   title: PropTypes.string,
 };
 
-CardEventoadministrador.propTypes = {
+CardEventoAdministrador.propTypes = {
   evento: PropTypes.object.isRequired,
   expandido: PropTypes.bool,
   toggleExpandir: PropTypes.func.isRequired,
   turmas: PropTypes.array,
   carregarInscritos: PropTypes.func,
   inscritosPorTurma: PropTypes.object,
-  carregarAvaliacoes: PropTypes.func,
-  avaliacoesPorTurma: PropTypes.object,
+  carregarAvaliacao: PropTypes.func,
+  avaliacaoPorTurma: PropTypes.object,
   presencasPorTurma: PropTypes.object,
   carregarPresencas: PropTypes.func,
   gerarRelatorioPDF: PropTypes.func,

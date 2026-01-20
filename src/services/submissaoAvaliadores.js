@@ -1,5 +1,5 @@
-// ✅ src/services/submissoesAvaliadores.js
-import { apiGet, apiPost, apiPatch, apiDelete } from "../services/api";
+// ✅ src/services/submissaoAvaliadores.js
+import { apiGet, apiPost, apiPatch, apiDelete } from "./api";
 
 /* ============================================================================
  * Utils locais
@@ -88,7 +88,7 @@ function normalizeLinha(x) {
       x.avaliado ??
       x.foi_avaliado ??
       x.minha_avaliacao_enviada ??
-      (Array.isArray(x.minhas_avaliacoes) && x.minhas_avaliacoes.length > 0)
+      (Array.isArray(x.minhas_avaliacao) && x.minhas_avaliacao.length > 0)
   );
 
   if (!id) return null;
@@ -130,14 +130,14 @@ function normalizeLista(arr) {
  */
 export async function listarTrabalhosAtribuidosAoAvaliador() {
   const candidatos = [
-    "/avaliador/submissoes",
-    "/avaliacoes/atribuidas",
-    "/submissoes/atribuidas",
-    "/avaliador/minhas-submissoes",
+    "/avaliador/submissao",
+    "/avaliacao/atribuidas",
+    "/submissao/atribuidas",
+    "/avaliador/minhas-submissao",
     "/avaliador/pendentes",
     // extras “genéricos” (ajuste se tiver algo equivalente no seu backend)
-    "/admin/submissoes/para-mim",
-    "/submissoes/para-mim",
+    "/admin/submissao/para-mim",
+    "/submissao/para-mim",
   ];
 
   for (const url of candidatos) {
@@ -155,9 +155,9 @@ export async function listarTrabalhosAtribuidosAoAvaliador() {
  * Atribuições (flex)
  * ==========================================================================*/
 
-export const listarAtribuicoes = (submissaoId, tipo = "todos") => {
+export const listarAtribuicao = (submissaoId, tipo = "todos") => {
   assertId(submissaoId, "submissaoId");
-  return apiGet(`/admin/submissoes/${submissaoId}/avaliadores`, {
+  return apiGet(`/admin/submissao/${submissaoId}/avaliadores`, {
     query: { tipo: optStr(tipo) || "todos" },
   });
 };
@@ -165,13 +165,13 @@ export const listarAtribuicoes = (submissaoId, tipo = "todos") => {
 export const incluirAvaliadoresFlex = (submissaoId, itens = []) => {
   assertId(submissaoId, "submissaoId");
   const payload = { itens: normalizeItens(itens) };
-  return apiPost(`/admin/submissoes/${submissaoId}/avaliadores`, payload);
+  return apiPost(`/admin/submissao/${submissaoId}/avaliadores`, payload);
 };
 
 export const revogarAvaliadorFlex = (submissaoId, { avaliadorId, tipo }) => {
   assertId(submissaoId, "submissaoId");
   assertId(avaliadorId, "avaliadorId");
-  return apiDelete(`/admin/submissoes/${submissaoId}/avaliadores`, {
+  return apiDelete(`/admin/submissao/${submissaoId}/avaliadores`, {
     body: { avaliadorId: coerceNum(avaliadorId), tipo: optStr(tipo) },
   });
 };
@@ -179,7 +179,7 @@ export const revogarAvaliadorFlex = (submissaoId, { avaliadorId, tipo }) => {
 export const restaurarAvaliadorFlex = (submissaoId, { avaliadorId, tipo }) => {
   assertId(submissaoId, "submissaoId");
   assertId(avaliadorId, "avaliadorId");
-  return apiPatch(`/admin/submissoes/${submissaoId}/avaliadores/restore`, {
+  return apiPatch(`/admin/submissao/${submissaoId}/avaliadores/restore`, {
     avaliadorId: coerceNum(avaliadorId),
     tipo: optStr(tipo),
   });
@@ -188,7 +188,7 @@ export const restaurarAvaliadorFlex = (submissaoId, { avaliadorId, tipo }) => {
 export const atribuirAvaliador = (submissaoId, dados) => {
   assertId(submissaoId, "submissaoId");
   const [item] = normalizeItens([dados]);
-  return apiPost(`/admin/submissoes/${submissaoId}/avaliadores`, { itens: [item] });
+  return apiPost(`/admin/submissao/${submissaoId}/avaliadores`, { itens: [item] });
 };
 
 export const trocarAvaliador = async (submissaoId, { deAvaliadorId, paraAvaliadorId, tipo }) => {
@@ -209,7 +209,7 @@ export const incluirAvaliadoresEmLote = (submissaoIds = [], itens = []) => {
     return coerceNum(i);
   });
   const payload = { submissaoIds: ids, itens: normalizeItens(itens) };
-  return apiPost(`/admin/submissoes/avaliadores/bulk-add`, payload);
+  return apiPost(`/admin/submissao/avaliadores/bulk-add`, payload);
 };
 
 export const revogarAvaliadorEmLote = (submissaoIds = [], { avaliadorId, tipo }) => {
@@ -218,7 +218,7 @@ export const revogarAvaliadorEmLote = (submissaoIds = [], { avaliadorId, tipo })
     return coerceNum(i);
   });
   assertId(avaliadorId, "avaliadorId");
-  return apiDelete(`/admin/submissoes/avaliadores/bulk-revoke`, {
+  return apiDelete(`/admin/submissao/avaliadores/bulk-revoke`, {
     body: { submissaoIds: ids, avaliadorId: coerceNum(avaliadorId), tipo: optStr(tipo) },
   });
 };
@@ -252,9 +252,9 @@ export const listarElegiveisComFiltro = (filtros = {}) => {
  * Resumos / contagens
  * ==========================================================================*/
 
-export const getResumoAtribuicoes = (submissaoId) => {
+export const getResumoAtribuicao = (submissaoId) => {
   assertId(submissaoId, "submissaoId");
-  return apiGet(`/admin/submissoes/${submissaoId}/avaliadores/resumo`, {
+  return apiGet(`/admin/submissao/${submissaoId}/avaliadores/resumo`, {
     on401: "silent",
     on403: "silent",
     on404: "silent",

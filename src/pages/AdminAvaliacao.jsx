@@ -1,4 +1,4 @@
-// ✅ src/pages/AdminAvaliacoes.jsx — Premium, responsivo, com filtros/ordenação e exportação CSV
+// ✅ src/pages/AdminAvaliacao.jsx — Premium, responsivo, com filtros/ordenação e exportação CSV
 /* Página de Avaliações (Admin) — layout e UX premium,
    com paleta exclusiva desta tela, seletor de evento, KPIs,
    grelha de barras, comentários qualitativos e utilidades. */
@@ -24,7 +24,7 @@
    import Footer from "../components/Footer";
    import NadaEncontrado from "../components/NadaEncontrado";
    import { apiGet } from "../services/api";
-   import { formatarDataBrasileira } from "../utils/data";
+   import { formatarDataBrasileira } from "../utils/dateTime";
    import BotaoPrimario from "../components/BotaoPrimario";
    
    /* ----------------------- Campos e Regras ----------------------- */
@@ -177,7 +177,7 @@
    }
    
    /* --------------------------- Página --------------------------- */
-   export default function AdminAvaliacoes() {
+   export default function AdminAvaliacao() {
      const [carregando, setCarregando] = useState(true);
      const [erro, setErro] = useState("");
      const [eventos, setEventos] = useState([]); // [{id,titulo,di,df,total_respostas}]
@@ -201,7 +201,7 @@
          setPayload(null);
          if (liveRef.current) liveRef.current.textContent = "Carregando eventos com avaliações…";
    
-         const lista = await apiGet("/api/admin/avaliacoes/eventos", { on401: "silent", on403: "silent" });
+         const lista = await apiGet("/api/admin/avaliacao/eventos", { on401: "silent", on403: "silent" });
          const arr = Array.isArray(lista) ? lista : [];
          setEventos(arr);
          if (!arr.length) {
@@ -227,7 +227,7 @@
          if (liveRef.current) liveRef.current.textContent = "Carregando avaliações do evento…";
    
          // 1) Preferencial: endpoint admin já agregador
-         const resp = await apiGet(`/api/admin/avaliacoes/evento/${evento_id}`, { on401: "silent", on403: "silent" });
+         const resp = await apiGet(`/api/admin/avaliacao/evento/${evento_id}`, { on401: "silent", on403: "silent" });
    
          if (resp?.agregados?.total > 0) {
            setPayload(resp);
@@ -241,10 +241,10 @@
            await Promise.all(
              turmas.map(async (t) => {
                try {
-                 const r = await apiGet(`/api/avaliacoes/turma/${t.id}`, { on401: "silent", on403: "silent" });
+                 const r = await apiGet(`/api/avaliacao/turma/${t.id}`, { on401: "silent", on403: "silent" });
                  const lista =
                    Array.isArray(r) ? r :
-                   Array.isArray(r?.avaliacoes) ? r.avaliacoes :
+                   Array.isArray(r?.avaliacao) ? r.avaliacao :
                    Array.isArray(r?.itens) ? r.itens :
                    Array.isArray(r?.comentarios) ? r.comentarios : [];
                  if (lista.length) {
@@ -354,7 +354,7 @@
          const a = document.createElement("a");
          const titulo = (eventoAtual?.titulo || "evento").replace(/[^\p{L}\p{N}\-_ ]/gu, "").replace(/\s+/g, "_");
          a.href = url;
-         a.download = `avaliacoes_${titulo}.csv`;
+         a.download = `avaliacao_${titulo}.csv`;
          a.click();
          URL.revokeObjectURL(url);
        } catch {

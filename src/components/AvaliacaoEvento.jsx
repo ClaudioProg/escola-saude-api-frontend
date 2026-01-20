@@ -1,4 +1,4 @@
-// 📁 src/components/AvaliacoesEvento.jsx
+// 📁 src/components/AvaliacaoEvento.jsx
 import { motion } from "framer-motion";
 import PropTypes from "prop-types";
 import { useEffect, useMemo, useState, useId } from "react";
@@ -64,13 +64,13 @@ function fmtMedia05(n) {
 }
 
 /** Calcula médias (evento + instrutor) e extrai comentários */
-function calcularMediasAvaliacoes(avaliacoes) {
-  if (!Array.isArray(avaliacoes) || avaliacoes.length === 0) {
+function calcularMediasAvaliacao(avaliacao) {
+  if (!Array.isArray(avaliacao) || avaliacao.length === 0) {
     return { mediaEvento: null, mediaInstrutor: null, detalhes: [], distInstrutor: null, totalRespostas: 0 };
   }
 
   // Média do instrutor + distribuição (escala 1..5)
-  const notasInstrutor = avaliacoes
+  const notasInstrutor = avaliacao
     .map((a) => notaEnumParaNumero(a?.desempenho_instrutor))
     .filter((n) => n != null);
 
@@ -88,7 +88,7 @@ function calcularMediasAvaliacoes(avaliacoes) {
     : null;
 
   // Média do evento (apenas 11 campos permitidos) — escala 1..5
-  const mediasIndividuaisEvento = avaliacoes
+  const mediasIndividuaisEvento = avaliacao
     .map((av) => {
       let soma = 0;
       let qtd = 0;
@@ -109,7 +109,7 @@ function calcularMediasAvaliacoes(avaliacoes) {
       : null;
 
   // Comentários (só inclui se houver texto)
-  const detalhes = avaliacoes
+  const detalhes = avaliacao
     .map((a) => ({
       desempenho: a?.desempenho_instrutor,
       gostou: a?.gostou_mais,
@@ -120,7 +120,7 @@ function calcularMediasAvaliacoes(avaliacoes) {
       [d?.desempenho, d?.gostou, d?.sugestao, d?.comentario].some((x) => !!String(x ?? "").trim())
     );
 
-  return { mediaEvento, mediaInstrutor, detalhes, distInstrutor, totalRespostas: avaliacoes.length };
+  return { mediaEvento, mediaInstrutor, detalhes, distInstrutor, totalRespostas: avaliacao.length };
 }
 
 /** ⭐ Renderização simples de estrelas (0..5) */
@@ -244,8 +244,8 @@ function exportCSV(filename, { mediaEvento, mediaInstrutor, distInstrutor, detal
 }
 
 /** Componente principal */
-export default function AvaliacoesEvento({
-  avaliacoes,
+export default function AvaliacaoEvento({
+  avaliacao,
   accent = "lousa",          // tema/gradiente
   showStars = true,          // exibir estrelas junto da média
   maxComentarios = 3,        // quantos comentários mostrar inicialmente
@@ -270,9 +270,9 @@ export default function AvaliacoesEvento({
     return () => mq?.removeEventListener?.("change", onChange);
   }, []);
 
-  const resultado = useMemo(() => calcularMediasAvaliacoes(avaliacoes), [avaliacoes]);
+  const resultado = useMemo(() => calcularMediasAvaliacao(avaliacao), [avaliacao]);
 
-  if (!Array.isArray(avaliacoes)) {
+  if (!Array.isArray(avaliacao)) {
     return (
       <p className="text-red-600 dark:text-red-400">
         Erro: avaliações não carregadas corretamente.
@@ -306,7 +306,7 @@ export default function AvaliacoesEvento({
   const boxPad = compact ? "p-2.5" : "p-3";
 
   const handleExport = () => {
-    exportCSV("avaliacoes_evento", resultado);
+    exportCSV("avaliacao_evento", resultado);
     onExport?.(resultado);
   };
 
@@ -476,8 +476,8 @@ export default function AvaliacoesEvento({
   );
 }
 
-AvaliacoesEvento.propTypes = {
-  avaliacoes: PropTypes.arrayOf(PropTypes.object),
+AvaliacaoEvento.propTypes = {
+  avaliacao: PropTypes.arrayOf(PropTypes.object),
   /** Tema/gradiente do componente */
   accent: PropTypes.oneOf([
     "lousa",

@@ -1,9 +1,9 @@
-// src/pages/AdminVotacoes.jsx
+// src/pages/AdminVotacao.jsx
 import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   adminListar, adminCriar, adminAtualizar, adminObter,
   adminCriarOpcao, adminAtualizarOpcao, adminStatus, adminRanking
-} from "../services/votacoes";
+} from "../services/votacao";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
@@ -57,7 +57,7 @@ function StatusChip({ status }) {
 }
 
 /* ──────────────────────────── Página ──────────────────────────── */
-export default function AdminVotacoes() {
+export default function AdminVotacao() {
   const { get, set } = useQueryState();
   const url = get();
 
@@ -108,7 +108,7 @@ export default function AdminVotacoes() {
       ...v,
       endereco: v.endereco ?? "",
       raio_m: clamp(v.raio_m ?? 200, 1, 200),
-      opcoes: Array.isArray(v.opcoes) ? v.opcoes : [],
+      opcao: Array.isArray(v.opcao) ? v.opcao : [],
     });
     set({ id: String(id) });
     await carregaRanking(id);
@@ -126,7 +126,7 @@ export default function AdminVotacoes() {
       raio_m: 200,
       evento_id: null,
       turma_id: null,
-      opcoes: [],
+      opcao: [],
     });
     setRanking([]);
     set({ id: "" });
@@ -151,10 +151,10 @@ export default function AdminVotacoes() {
 
       if (sel.id) {
         const upd = await adminAtualizar(sel.id, payload);
-        setSel({ ...sel, ...upd, opcoes: Array.isArray(upd?.opcoes) ? upd.opcoes : (sel.opcoes || []) });
+        setSel({ ...sel, ...upd, opcao: Array.isArray(upd?.opcao) ? upd.opcao : (sel.opcao || []) });
       } else {
         const criado = await adminCriar(payload);
-        setSel({ ...criado, opcoes: Array.isArray(criado?.opcoes) ? criado.opcoes : [] });
+        setSel({ ...criado, opcao: Array.isArray(criado?.opcao) ? criado.opcao : [] });
         set({ id: String(criado.id) });
       }
       toast.success("Salvo!");
@@ -166,14 +166,14 @@ export default function AdminVotacoes() {
 
   async function addOpcao() {
     if (!sel?.id) return toast.info("Salve a votação primeiro.");
-    const ordem = (sel.opcoes?.length || 0) + 1;
+    const ordem = (sel.opcao?.length || 0) + 1;
     const o = await adminCriarOpcao(sel.id, { titulo: "Nova opção", ordem });
-    setSel((prev) => ({ ...prev, opcoes: [...(prev?.opcoes || []), o] }));
+    setSel((prev) => ({ ...prev, opcao: [...(prev?.opcao || []), o] }));
   }
 
   async function salvarOpcao(idOpcao) {
     if (!sel?.id) return;
-    const o = (sel.opcoes || []).find(x => x.id === idOpcao);
+    const o = (sel.opcao || []).find(x => x.id === idOpcao);
     if (!o) return;
 
     const payload = {
@@ -185,7 +185,7 @@ export default function AdminVotacoes() {
     const upd = await adminAtualizarOpcao(sel.id, o.id, payload);
     setSel((prev) => ({
       ...prev,
-      opcoes: (prev?.opcoes || []).map(x => x.id === o.id ? upd : x),
+      opcao: (prev?.opcao || []).map(x => x.id === o.id ? upd : x),
     }));
   }
 
@@ -193,8 +193,8 @@ export default function AdminVotacoes() {
   const patchOpcao = useCallback((idOpcao, patch) => {
     setSel((prev) => {
       if (!prev) return prev;
-      const opcoes = (prev.opcoes || []).map((o) => (o.id === idOpcao ? { ...o, ...patch } : o));
-      return { ...prev, opcoes };
+      const opcao = (prev.opcao || []).map((o) => (o.id === idOpcao ? { ...o, ...patch } : o));
+      return { ...prev, opcao };
     });
   }, []);
 
@@ -244,7 +244,7 @@ export default function AdminVotacoes() {
 
   const voteUrl = useMemo(() => {
     if (!sel?.id) return "";
-    return `${window.location.origin}/votacoes/${sel.id}`;
+    return `${window.location.origin}/votacao/${sel.id}`;
   }, [sel?.id]);
 
   function copiarLink() {
@@ -634,7 +634,7 @@ export default function AdminVotacoes() {
                 </div>
 
                 <ul className="space-y-2">
-                  {(sel.opcoes || []).map(o => (
+                  {(sel.opcao || []).map(o => (
                     <li key={o.id} className="grid md:grid-cols-4 gap-2 items-center">
                       <input
                         className="input md:col-span-2"
@@ -664,7 +664,7 @@ export default function AdminVotacoes() {
                       </select>
                     </li>
                   ))}
-                  {(!sel.opcoes || sel.opcoes.length === 0) && (
+                  {(!sel.opcao || sel.opcao.length === 0) && (
                     <li className="text-sm opacity-60">Nenhuma opção criada.</li>
                   )}
                 </ul>

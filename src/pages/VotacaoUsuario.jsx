@@ -1,6 +1,6 @@
-// ✅ src/pages/VotacoesUsuario.jsx — premium (mobile-first / a11y / ministats / geo UX)
+// ✅ src/pages/VotacaoUsuario.jsx — premium (mobile-first / a11y / ministats / geo UX)
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { listarVotacoesElegiveis, votar } from "../services/votacoes";
+import { listarVotacaoElegiveis, votar } from "../services/votacao";
 import { toast } from "react-toastify";
 import {
   CheckCircle2,
@@ -123,7 +123,7 @@ function clampArrayToggle({ current = [], id, tipo = "unica", max = 1 }) {
   return [...set];
 }
 
-export default function VotacoesUsuario() {
+export default function VotacaoUsuario() {
   const [lista, setLista] = useState([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
@@ -149,7 +149,7 @@ export default function VotacoesUsuario() {
     setLoading(true);
     setErro("");
     try {
-      const data = await listarVotacoesElegiveis();
+      const data = await listarVotacaoElegiveis();
       setLista(Array.isArray(data) ? data : data?.data || []);
       setLive("Votações carregadas.");
     } catch (e) {
@@ -225,7 +225,7 @@ export default function VotacoesUsuario() {
         return;
       }
 
-      const payload = { opcoes: selected };
+      const payload = { opcao: selected };
       if (coords) Object.assign(payload, { cliLat: coords.lat, cliLng: coords.lng });
 
       try {
@@ -255,10 +255,10 @@ export default function VotacoesUsuario() {
   );
 
   const totals = useMemo(() => {
-    const totalVotacoes = lista.length;
-    const totalOpcoes = lista.reduce((acc, v) => acc + (v?.opcoes?.length || 0), 0);
+    const totalVotacao = lista.length;
+    const totalOpcao = lista.reduce((acc, v) => acc + (v?.opcao?.length || 0), 0);
     const totalSelecionadas = Object.values(escolhas).reduce((acc, arr) => acc + (arr?.length || 0), 0);
-    return { totalVotacoes, totalOpcoes, totalSelecionadas };
+    return { totalVotacao, totalOpcao, totalSelecionadas };
   }, [lista, escolhas]);
 
   // Empty / Loading
@@ -327,8 +327,8 @@ export default function VotacoesUsuario() {
 
         {/* ministats */}
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-          <MiniStat label="Votações" value={totals.totalVotacoes} hint="Disponíveis agora" />
-          <MiniStat label="Opções" value={totals.totalOpcoes} hint="Somatório de alternativas" />
+          <MiniStat label="Votações" value={totals.totalVotacao} hint="Disponíveis agora" />
+          <MiniStat label="Opções" value={totals.totalOpcao} hint="Somatório de alternativas" />
           <MiniStat label="Selecionadas" value={totals.totalSelecionadas} hint="Antes de enviar" />
         </section>
 
@@ -400,7 +400,7 @@ export default function VotacoesUsuario() {
                 </header>
 
                 <ul className="space-y-2">
-                  {(v.opcoes || []).map((o) => {
+                  {(v.opcao || []).map((o) => {
                     const active = selected.includes(o.id);
 
                     // desabilita opções extras quando limite atingido (mantém clicável apenas as já marcadas)

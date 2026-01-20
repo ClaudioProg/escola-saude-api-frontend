@@ -1,4 +1,4 @@
-// 📁 src/pages/AdminSubmissoes.jsx
+// 📁 src/pages/Adminsubmissao.jsx
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -213,7 +213,7 @@ const handleExportCSV = (items = []) => {
   const stamp =
     `${ts.getFullYear()}${String(ts.getMonth() + 1).padStart(2, "0")}${String(ts.getDate()).padStart(2, "0")}-` +
     `${String(ts.getHours()).padStart(2, "0")}${String(ts.getMinutes()).padStart(2, "0")}`;
-  const filename = `submissoes_admin_${stamp}.csv`;
+  const filename = `submissao_admin_${stamp}.csv`;
 
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -261,11 +261,11 @@ const useUrlState = () => {
 };
 
 /* ————————————————— Página principal ————————————————— */
-export default function AdminSubmissoes() {
+export default function Adminsubmissao() {
   const { get, set } = useUrlState();
   const url = get();
 
-  const [submissoes, setSubmissoes] = useState([]);
+  const [submissao, setsubmissao] = useState([]);
   const [oralOpen, setOralOpen] = useState(false);
   const [filtroChamada, setFiltroChamada] = useState(url.chamada);
   const [filtroStatus, setFiltroStatus] = useState(url.status);
@@ -297,11 +297,11 @@ export default function AdminSubmissoes() {
       try {
         setLoading(true);
         const [subs, ch] = await Promise.all([
-          api.get("/admin/submissoes", { signal: ac.signal }),
+          api.get("/admin/submissao", { signal: ac.signal }),
           api.get("/chamadas/ativas", { signal: ac.signal }),
         ]);
         const base = unwrap(subs).map((it) => ({ ...it, _hasAnexo: hasAnexoRaw(it) }));
-        setSubmissoes(base);
+        setsubmissao(base);
         setChamadas(unwrap(ch));
 
         // checagem preguiçosa de anexos
@@ -310,12 +310,12 @@ export default function AdminSubmissoes() {
         let idx = 0;
         const axiosOk = (s) => (s >= 200 && s < 300) || s === 404;
         const run = async (id) => {
-          const tryPublic = await api.get(`/submissoes/${id}`, { signal: ac.signal, validateStatus: axiosOk });
+          const tryPublic = await api.get(`/submissao/${id}`, { signal: ac.signal, validateStatus: axiosOk });
           if (tryPublic?.status !== 404) {
             const sub = Array.isArray(tryPublic?.data) ? tryPublic.data[0] : tryPublic?.data ?? tryPublic;
             return { id, ok: hasAnexoRaw(sub) };
           }
-          const tryAdmin = await api.get(`/admin/submissoes/${id}`, { signal: ac.signal, validateStatus: axiosOk });
+          const tryAdmin = await api.get(`/admin/submissao/${id}`, { signal: ac.signal, validateStatus: axiosOk });
           if (tryAdmin?.status !== 404) {
             const sub = Array.isArray(tryAdmin?.data) ? tryAdmin.data[0] : tryAdmin?.data ?? tryAdmin;
             return { id, ok: hasAnexoRaw(sub) };
@@ -327,7 +327,7 @@ export default function AdminSubmissoes() {
             const id = idsParaChecar[idx++];
             const res = await run(id);
             if (res.ok) {
-              setSubmissoes((prev) => prev.map((it) => (it.id === id ? { ...it, _hasAnexo: true } : it)));
+              setsubmissao((prev) => prev.map((it) => (it.id === id ? { ...it, _hasAnexo: true } : it)));
             }
           }
         });
@@ -356,7 +356,7 @@ export default function AdminSubmissoes() {
 
   const linhasTematicas = useMemo(() => {
     const map = new Map();
-    for (const s of submissoes) {
+    for (const s of submissao) {
       const key = linhaKeyFromSub(s);
       const nome = s?.linha_tematica_nome ?? s?.linhaTematicaNome ?? null;
       const codigo = s?.linha_tematica_codigo ?? s?.linha_tematicaCodigo ?? null;
@@ -366,12 +366,12 @@ export default function AdminSubmissoes() {
     return Array.from(map.values()).sort((a, b) =>
       a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })
     );
-  }, [submissoes]);
+  }, [submissao]);
 
   // filtro
   const filtradas = useMemo(() => {
     const termo = (debouncedBusca || "").trim().toLowerCase();
-    return submissoes.filter((s) => {
+    return submissao.filter((s) => {
       const matchChamada = !filtroChamada || Number(s.chamada_id) === Number(filtroChamada);
       const matchStatus = !filtroStatus
         ? true
@@ -386,7 +386,7 @@ export default function AdminSubmissoes() {
       const matchBusca = !termo || pool.some((t) => t.includes(termo));
       return matchChamada && matchStatus && matchLinha && matchBusca;
     });
-  }, [submissoes, filtroChamada, filtroStatus, filtroLinha, debouncedBusca]);
+  }, [submissao, filtroChamada, filtroStatus, filtroLinha, debouncedBusca]);
 
   // ordenação
   const sorted = useMemo(() => {
@@ -426,7 +426,7 @@ export default function AdminSubmissoes() {
 
   // stats (sempre do conjunto total carregado)
   const stats = useMemo(() => {
-    const sAll = submissoes;
+    const sAll = submissao;
     const totalAll = sAll.length;
     const aprovadas = sAll.filter((s) =>
       ["aprovado_oral", "aprovado_exposicao", "aprovado_escrita"].includes(String(s.status || "").toLowerCase())
@@ -434,7 +434,7 @@ export default function AdminSubmissoes() {
     const reprovadas = sAll.filter((s) => String(s.status || "").toLowerCase() === "reprovado").length;
     const emAvaliacao = sAll.filter((s) => String(s.status || "").toLowerCase() === "em_avaliacao").length;
     return { total: totalAll, aprovadas, reprovadas, emAvaliacao };
-  }, [submissoes]);
+  }, [submissao]);
 
   const setSort = (key) => {
     if (sortKey === key) {
@@ -884,7 +884,7 @@ export default function AdminSubmissoes() {
             submissao={selecionada}
             onDetectAnexo={(id, has) => {
               if (!has) return;
-              setSubmissoes((prev) => prev.map((it) => (it.id === id ? { ...it, _hasAnexo: true } : it)));
+              setsubmissao((prev) => prev.map((it) => (it.id === id ? { ...it, _hasAnexo: true } : it)));
             }}
           />
         )}
@@ -905,7 +905,7 @@ export default function AdminSubmissoes() {
             onClose={() => setRankingOpen(false)}
             itens={sorted}
             onStatusChange={(id, patch) => {
-              setSubmissoes((prev) =>
+              setsubmissao((prev) =>
                 prev.map((it) => {
                   if (it.id !== id) return it;
                   const p = typeof patch === "string" ? { status: patch } : patch || {};

@@ -1,4 +1,4 @@
-// 📁 frontend/src/utils/data.js
+// 📁 frontend/src/utils/dateTime.js
 // Padrões do projeto:
 // - Datas "date-only" tratadas como string "YYYY-MM-DD" (sem Date()).
 // - Quando precisar Date, construir SEMPRE com new Date(y, m-1, d, hh, mm, ss, ms) (local).
@@ -351,4 +351,3 @@
  
    return idade >= 0 && idade < 140 ? idade : null;
  }
- 
